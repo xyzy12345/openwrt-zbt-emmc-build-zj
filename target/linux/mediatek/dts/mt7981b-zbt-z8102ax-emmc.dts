@@ -262,20 +262,6 @@
 };
 
 &pio {
-	mmc0_pins_default: mmc0-pins-default {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
-	mmc0_pins_uhs: mmc0-pins-uhs {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
 	gpio-line-names =
 		"mesh",		/* GPIO0 */
 		"reset",	/* GPIO1 */
@@ -296,6 +282,20 @@
 		"", "", "", "", "", "", "", "",	/* GPIO30-37 */
 		"switch_irq",	/* GPIO38 */
 		"switch_reset";	/* GPIO39 */
+
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
 };
 
 &uart0 {
