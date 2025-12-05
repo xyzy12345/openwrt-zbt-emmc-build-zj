@@ -1,0 +1,169 @@
+name: Build OpenWrt for ZBT-Z8102AX-eMMC (MT7981B)
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'configs/**'
+      - 'dts/**'
+      - 'patches/**'
+      - '.github/workflows/build-openwrt-7981b-emmc.yml'
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 2 * * *'  # 每天UTC 2点自动构建
+  workflow_dispatch:  # 手动触发
+    inputs:
+      clean_build:
+        description: 'Clean build (remove ccache)'
+        required: false
+        default: 'false'
+
+env:
+  OPENWRT_VERSION: "24.10.4"
+  TARGET: "mediatek"
+  SUBTARGET: "filogic"
+  DEVICE: "zbtlink_z8102ax-emmc"
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+      with:
+        path: source
+        fetch-depth: 0
+    
+    - name: Setup build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          clang \
+          flex \
+          bison \
+          g++ \
+          gawk \
+          gcc-multilib \
+          gettext \
+          git \
+          libncurses5-dev \
+          libssl-dev \
+          python3 \
+          python3-distutils \
+          rsync \
+          unzip \
+          zlib1g-dev \
+          file \
+          wget
+        
+        # 设置ccache
+        sudo apt-get install -y ccache
+        echo "/usr/lib/ccache" >> $GITHUB_PATH
+    
+    - name: Clone OpenWrt
+      run: |
+        git clone --depth=1 https://github.com/openwrt/openwrt.git --branch v${{ env.OPENWRT_VERSION }}
+        cd openwrt
+        
+        # 应用补丁
+        if [ -f ../source/patches/0101-add-zbtlink-z8102ax-emmc.patch ]; then
+          git apply ../source/patches/0101-add-zbtlink-z8102ax-emmc.patch
+        fi
+        
+        # 复制DTS文件
+        mkdir -p target/linux/mediatek/dts/
+        if [ -f ../source/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          cp ../source/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
+        fi
+        
+        # 复制配置文件
+        if [ -f ../source/configs/zbtlink_z8102ax-emmc.config ]; then
+          cp ../source/configs/zbtlink_z8102ax-emmc.config .config
+        elif [ -f ../source/.config ]; then
+          cp ../source/.config .config
+        fi
+    
+    - name: Update feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+    
+    - name: Configure OpenWrt
+      run: |
+        cd openwrt
+        
+        # 清理缓存（如果选择）
+        if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+          make clean
+          rm -rf tmp .config* feeds
+        fi
+        
+        # 生成默认配置
+        make defconfig
+        
+        # 自定义配置（如果需要）
+        if [ -f ../source/configs/custom.config ]; then
+          cat ../source/configs/custom.config >> .config
+        fi
+        
+        # 验证配置
+        make oldconfig
+    
+    - name: Download package sources
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+    
+    - name: Build OpenWrt
+      run: |
+        cd openwrt
+        
+        # 设置编译线程数
+        CPU_CORES=$(nproc)
+        BUILD_JOBS=$((CPU_CORES + 1))
+        
+        # 开始编译
+        echo "开始编译，使用 $BUILD_JOBS 个线程..."
+        make -j$BUILD_JOBS V=s 2>&1 | tee build.log
+        
+        # 检查编译结果
+        if [ -f bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-${{ env.OPENWRT_VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}-${{ env.DEVICE }}-sysupgrade.bin ]; then
+          echo "编译成功！"
+        else
+          echo "编译失败！"
+          exit 1
+        fi
+    
+    - name: Upload firmware artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: openwrt-${{ env.DEVICE }}-firmware
+        path: |
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
+        retention-days: 7
+    
+    - name: Upload build logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: openwrt-${{ env.DEVICE }}-logs
+        path: |
+          openwrt/build.log
+          openwrt/.config
+        retention-days: 7
+    
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
+        draft: false
+        prerelease: false
+        generate_release_notes: true
