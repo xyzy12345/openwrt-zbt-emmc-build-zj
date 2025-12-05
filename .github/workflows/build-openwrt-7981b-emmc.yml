@@ -69,11 +69,6 @@ jobs:
         git clone --depth=1 https://github.com/openwrt/openwrt.git --branch v${{ env.OPENWRT_VERSION }}
         cd openwrt
         
-        # 应用补丁
-        if [ -f ../source/patches/0101-add-zbtlink-z8102ax-emmc.patch ]; then
-          git apply ../source/patches/0101-add-zbtlink-z8102ax-emmc.patch
-        fi
-        
         # 复制DTS文件
         mkdir -p target/linux/mediatek/dts/
         if [ -f ../source/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
@@ -81,6 +76,7 @@ jobs:
         fi
         
         # 复制配置文件
+        mkdir -p target/linux/mediatek/image/filogic.mk
         if [ -f ../source/configs/zbtlink_z8102ax-emmc.config ]; then
           cp ../source/configs/zbtlink_z8102ax-emmc.config .config
         elif [ -f ../source/.config ]; then
