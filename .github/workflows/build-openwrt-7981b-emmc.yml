@@ -2,7 +2,7 @@ name: Build OpenWrt for ZBT-Z8102AX-eMMC (MT7981B)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'copilot/**' ]
     paths:
       - 'configs/**'
       - 'dts/**'
@@ -14,12 +14,7 @@ on:
     branches: [ main, master ]
   schedule:
     - cron: '0 2 * * *'  # 每天UTC 2点自动构建
-  workflow_dispatch:  # 手动触发
-    inputs:
-      clean_build:
-        description: 'Clean build (remove ccache)'
-        required: false
-        default: 'false'
+  workflow_dispatch:  # 手动触发 - 允许从任何分支运行
 
 env:
   OPENWRT_VERSION: "24.10.4"
