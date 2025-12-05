@@ -7,6 +7,8 @@ on:
       - 'configs/**'
       - 'dts/**'
       - 'patches/**'
+      - 'target/linux/mediatek/**'
+      - 'scripts/**'
       - '.github/workflows/build-openwrt-7981b-emmc.yml'
   pull_request:
     branches: [ main, master ]
@@ -70,17 +72,28 @@ jobs:
         cd openwrt
         
         # 复制DTS文件
-        mkdir -p target/linux/mediatek/dts/
         if [ -f ../source/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          echo "复制DTS文件..."
+          mkdir -p target/linux/mediatek/dts/
           cp ../source/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
+        else
+          echo "警告: 未找到DTS文件"
+        fi
+        
+        # 复制filogic.mk文件
+        if [ -f ../source/target/linux/mediatek/image/filogic.mk ]; then
+          echo "复制filogic.mk文件..."
+          mkdir -p target/linux/mediatek/image/
+          cp ../source/target/linux/mediatek/image/filogic.mk target/linux/mediatek/image/
         fi
         
         # 复制配置文件
-        mkdir -p target/linux/mediatek/image/filogic.mk
         if [ -f ../source/configs/zbtlink_z8102ax-emmc.config ]; then
+          echo "复制配置文件..."
           cp ../source/configs/zbtlink_z8102ax-emmc.config .config
-        elif [ -f ../source/.config ]; then
-          cp ../source/.config .config
+        else
+          echo "错误: 未找到配置文件"
+          exit 1
         fi
     
     - name: Update feeds
@@ -95,6 +108,7 @@ jobs:
         
         # 清理缓存（如果选择）
         if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+          echo "执行清理构建..."
           make clean
           rm -rf tmp .config* feeds
         fi
@@ -104,6 +118,7 @@ jobs:
         
         # 自定义配置（如果需要）
         if [ -f ../source/configs/custom.config ]; then
+          echo "应用自定义配置..."
           cat ../source/configs/custom.config >> .config
         fi
         
@@ -114,6 +129,7 @@ jobs:
       run: |
         cd openwrt
         make download -j$(nproc)
+        find dl -size -1024c -exec rm -f {} \;
     
     - name: Build OpenWrt
       run: |
@@ -128,10 +144,14 @@ jobs:
         make -j$BUILD_JOBS V=s 2>&1 | tee build.log
         
         # 检查编译结果
-        if [ -f bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-${{ env.OPENWRT_VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}-${{ env.DEVICE }}-sysupgrade.bin ]; then
+        FIRMWARE_PATH="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-${{ env.OPENWRT_VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}-${{ env.DEVICE }}-sysupgrade.bin"
+        if [ -f "$FIRMWARE_PATH" ]; then
           echo "编译成功！"
+          echo "固件路径: $FIRMWARE_PATH"
         else
           echo "编译失败！"
+          echo "查找可能的固件文件:"
+          find bin/targets/ -name "*.bin" -type f | head -10
           exit 1
         fi
     
@@ -143,6 +163,7 @@ jobs:
         path: |
           openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
           openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/*
         retention-days: 7
     
     - name: Upload build logs
@@ -153,6 +174,7 @@ jobs:
         path: |
           openwrt/build.log
           openwrt/.config
+          openwrt/config.*
         retention-days: 7
     
     - name: Create GitHub Release
