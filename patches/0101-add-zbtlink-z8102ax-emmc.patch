@@ -1,0 +1,41 @@
+From: Your Name <your.email@example.com>
+Date: Sat, 1 Jan 2023 00:00:00 +0800
+Subject: [PATCH] Add support for ZBT-Z8102AX-eMMC device
+
+This adds support for ZBT-Z8102AX-eMMC router with MT7981B SoC
+and eMMC storage.
+
+Signed-off-by: Your Name <your.email@example.com>
+---
+ target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts | 194 ++++++++++++++++++
+ target/linux/mediatek/image/filogic.mk                 |  14 ++
+ 2 files changed, 208 insertions(+)
+ create mode 100644 target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts
+
+diff --git a/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts b/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts
+new file mode 100644
+index 0000000000..e69de29bb2
+diff --git a/target/linux/mediatek/image/filogic.mk b/target/linux/mediatek/image/filogic.mk
+index abcdef1234..ghijkl5678 100644
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -123,3 +123,17 @@ define Device/xiaomi_wr30u-ubootmod
+   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+ endef
+ TARGET_DEVICES += xiaomi_wr30u-ubootmod
++
++define Device/zbtlink_z8102ax-emmc
++  DEVICE_VENDOR := ZBT
++  DEVICE_MODEL := Z8102AX-eMMC
++  DEVICE_DTS := mt7981b-zbt-z8102ax-emmc
++  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
++  SUPPORTED_DEVICES := zbtlink,z8102ax-emmc
++  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware wpad-openssl \
++    kmod-usb3 kmod-usb2 kmod-mmc-mtk kmod-fs-ext4 \
++    kmod-mtk-ppe kmod-hwmon-pwmfan
++  IMAGES := sysupgrade.bin
++  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
++endef
++TARGET_DEVICES += zbtlink_z8102ax-emmc
+-- 
+2.40.1
