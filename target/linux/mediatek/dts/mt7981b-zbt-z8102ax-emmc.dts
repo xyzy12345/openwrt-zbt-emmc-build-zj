@@ -1,5 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
 /dts-v1/;
-#include "mt7981.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/pinctrl/mt65xx.h>
+
+#include "mt7981b.dtsi"
 
 / {
 	model = "ZBT-Z8102AX-eMMC";
@@ -7,52 +13,16 @@
 
 	aliases {
 		serial0 = &uart0;
-		mmc0 = &mmc0;
-		ethernet0 = &gmac0;
-		ethernet1 = &gmac1;
-		led-boot = &led_green;
-		led-failsafe = &led_red;
-		led-running = &led_green;
-		led-upgrade = &led_blue;
+		led-boot = &led_status_red;
+		led-failsafe = &led_status_red;
+		led-running = &led_status_green;
+		led-upgrade = &led_status_green;
+		label-mac-device = &gmac0;
 	};
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs = "console=ttyS0,115200n8 earlycon=uart8250,mmio32,0x11002000 root=/dev/mmcblk0p6 rootwait rw";
-	};
-
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0 0x40000000 0 0x20000000>;
-	};
-
-	leds {
-		compatible = "gpio-leds";
-
-		led_green: green {
-			label = "green:system";
-			gpios = <&pio 10 GPIO_ACTIVE_HIGH>;
-		};
-
-		led_blue: blue {
-			label = "blue:wlan";
-			gpios = <&pio 11 GPIO_ACTIVE_HIGH>;
-		};
-
-		led_red: red {
-			label = "red:wlan";
-			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
-		};
-
-		led_4g: 4g {
-			label = "4g";
-			gpios = <&pio 8 GPIO_ACTIVE_HIGH>;
-		};
-
-		led_4g2: 4g2 {
-			label = "4g2";
-			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
-		};
+		bootargs = "earlycon=uart8250,mmio32,0x11002000 console=ttyS0,115200n8 root=/dev/mmcblk0p6 rootwait";
 	};
 
 	gpio-keys {
@@ -66,46 +36,82 @@
 
 		mesh {
 			label = "mesh";
-			linux,code = <BTN_0>;
+			linux,code = <KEY_WPS_BUTTON>;
 			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
 		};
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		led_status_red: red {
+			gpios = <&pio 9 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_RED>;
+			function = LED_FUNCTION_STATUS;
+		};
+
+		led_status_green: green {
+			gpios = <&pio 10 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_STATUS;
+		};
+
+		led_status_blue: blue {
+			gpios = <&pio 11 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_STATUS;
+		};
+
+		led_4g1: 4g1 {
+			gpios = <&pio 8 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_WAN;
+		};
+
+		led_4g2: 4g2 {
+			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_WAN;
+		};
+	};
+
+	watchdog {
+		compatible = "linux,wdt-gpio";
+		gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
+		hw_algo = "toggle";
+		hw_margin_ms = <1000>;
+	};
+
 	gpio-export {
 		compatible = "gpio-export";
+		#size-cells = <0>;
 
-		sim {
-			gpio-export,name = "sim";
-			gpio-export,output = <1>;
-			gpios = <&pio 6 GPIO_ACTIVE_HIGH>;
-		};
-
-		sim2 {
-			gpio-export,name = "sim2";
-			gpio-export,output = <1>;
-			gpios = <&pio 7 GPIO_ACTIVE_HIGH>;
-		};
-
-		4g_en {
-			gpio-export,name = "4g_en";
+		4g1 {
+			gpio-export,name = "4g1";
 			gpio-export,output = <1>;
 			gpios = <&pio 4 GPIO_ACTIVE_HIGH>;
 		};
 
-		4g2_en {
-			gpio-export,name = "4g2_en";
+		4g2 {
+			gpio-export,name = "4g2";
 			gpio-export,output = <1>;
 			gpios = <&pio 5 GPIO_ACTIVE_HIGH>;
 		};
 
-		wdg_en {
-			gpio-export,name = "wdg_en";
-			gpio-export,output = <1>;
-			gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
+		sim1 {
+			gpio-export,name = "sim1";
+			gpio-export,output = <0>;
+			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+		};
+
+		sim2 {
+			gpio-export,name = "sim2";
+			gpio-export,output = <0>;
+			gpios = <&pio 7 GPIO_ACTIVE_LOW>;
 		};
 	};
 
-	reg_3p3v: regulator-3p3v {
+	regulator-3p3v {
 		compatible = "regulator-fixed";
 		regulator-name = "fixed-3.3V";
 		regulator-min-microvolt = <3300000>;
@@ -115,24 +121,6 @@
 	};
 };
 
-&uart0 {
-	status = "okay";
-};
-
-&mmc0 {
-	pinctrl-names = "default", "state_uhs";
-	pinctrl-0 = <&mmc0_pins_default>;
-	pinctrl-1 = <&mmc0_pins_uhs>;
-	status = "okay";
-	bus-width = <8>;
-	max-frequency = <52000000>;
-	cap-mmc-highspeed;
-	mmc-hs200-1_8v;
-	non-removable;
-	vmmc-supply = <&reg_3p3v>;
-	vqmmc-supply = <&reg_3p3v>;
-};
-
 &eth {
 	status = "okay";
 
@@ -140,8 +128,8 @@
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 		phy-mode = "2500base-x";
-		phy-handle = <&phy0>;
-		
+		nvmem-cell-names = "mac-address";
+
 		fixed-link {
 			speed = <2500>;
 			full-duplex;
@@ -154,70 +142,145 @@
 		reg = <1>;
 		phy-mode = "gmii";
 		phy-handle = <&int_gbe_phy>;
+		nvmem-cell-names = "mac-address";
+	};
+};
+
+&mdio_bus {
+	switch: switch@1f {
+		compatible = "mediatek,mt7531";
+		reg = <31>;
+		reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-parent = <&pio>;
+		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
-	mdio: mdio-bus {
+	int_gbe_phy: ethernet-phy@0 {
+		compatible = "ethernet-phy-id03a2.9461";
+		reg = <0>;
+		nvmem-cell-names = "phy-cal-data";
+		nvmem-cells = <&phy_calibration>;
+		phy-mode = "gmii";
+	};
+};
+
+&switch {
+	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		int_gbe_phy: ethernet-phy@0 {
+		port@0 {
 			reg = <0>;
-			compatible = "ethernet-phy-ieee802.3-c22";
-			phy-mode = "gmii";
+			label = "lan1";
 		};
 
-		phy0: ethernet-phy@1 {
+		port@1 {
 			reg = <1>;
-			compatible = "ethernet-phy-ieee802.3-c45";
+			label = "lan2";
 		};
 
-		switch@1f {
-			compatible = "mediatek,mt7531";
-			reg = <31>;
-			reset-gpios = <&pio 39 GPIO_ACTIVE_LOW>;
-			
-			ports {
-				#address-cells = <1>;
-				#size-cells = <0>;
+		port@2 {
+			reg = <2>;
+			label = "lan3";
+		};
 
-				port@0 {
-					reg = <0>;
-					label = "lan1";
-				};
+		port@3 {
+			reg = <3>;
+			label = "lan4";
+		};
 
-				port@1 {
-					reg = <1>;
-					label = "lan2";
-				};
+		port@6 {
+			reg = <6>;
+			label = "cpu";
+			ethernet = <&gmac0>;
+			phy-mode = "2500base-x";
 
-				port@2 {
-					reg = <2>;
-					label = "lan3";
-				};
-
-				port@3 {
-					reg = <3>;
-					label = "lan4";
-				};
-
-				port@6 {
-					reg = <6>;
-					label = "cpu";
-					ethernet = <&gmac0>;
-					phy-mode = "2500base-x";
-					
-					fixed-link {
-						speed = <2500>;
-						full-duplex;
-						pause;
-					};
-				};
+			fixed-link {
+				speed = <2500>;
+				full-duplex;
+				pause;
 			};
 		};
 	};
 };
 
-&wifi {
+&mmc0 {
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	status = "okay";
+	bus-width = <8>;
+	max-frequency = <52000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	non-removable;
+	vmmc-supply = <&regulator-3p3v>;
+	vqmmc-supply = <&regulator-3p3v>;
+	no-sd;
+	no-sdio;
+};
+
+&pio {
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	gpio-line-names =
+		"mesh",		/* GPIO0 */
+		"reset",	/* GPIO1 */
+		"watchdog",	/* GPIO2 */
+		"",		/* GPIO3 */
+		"4g1_pwr",	/* GPIO4 */
+		"4g2_pwr",	/* GPIO5 */
+		"sim1",		/* GPIO6 */
+		"sim2",		/* GPIO7 */
+		"4g1_led",	/* GPIO8 */
+		"red_led",	/* GPIO9 */
+		"green_led",	/* GPIO10 */
+		"blue_led",	/* GPIO11 */
+		"",		/* GPIO12 */
+		"4g2_led",	/* GPIO13 */
+		"", "","", "", "", "", "", "",	/* GPIO14-21 */
+		"", "", "", "", "", "", "", "",	/* GPIO22-29 */
+		"", "", "", "", "", "", "", "",	/* GPIO30-37 */
+		"switch_irq",	/* GPIO38 */
+		"switch_reset",	/* GPIO39 */
+		"", "", "", "", "", "", "",	/* GPIO40-46 */
+		"", "", "", "", "", "";		/* GPIO47-52 */
+
+	spi0_flash_pins: spi0-pins {
+		mux {
+			function = "spi";
+			groups = "spi0", "spi0_wp_hold";
+		};
+
+		conf-pu {
+			pins = "SPI0_CS", "SPI0_HOLD", "SPI0_WP";
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-up;
+		};
+
+		conf-pd {
+			pins = "SPI0_CLK", "SPI0_MOSI", "SPI0_MISO";
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down;
+		};
+	};
+};
+
+&uart0 {
 	status = "okay";
 };
 
@@ -229,22 +292,33 @@
 	status = "okay";
 };
 
-&usb {
+&xhci {
 	status = "okay";
 };
 
-&pcie {
+&wifi {
 	status = "okay";
+	nvmem-cells = <&eeprom_factory>;
+	nvmem-cell-names = "eeprom";
 };
 
-&spi0 {
-	status = "disabled";
-};
+&efuse {
+	#address-cells = <1>;
+	#size-cells = <1>;
 
-&spi1 {
-	status = "disabled";
-};
+	phy_calibration: calib@8dc {
+		reg = <0x8dc 0x10>;
+	};
 
-&i2c0 {
-	status = "disabled";
+	macaddr_factory_004: macaddr@4 {
+		reg = <0x4 0x6>;
+	};
+
+	macaddr_factory_02a: macaddr@2a {
+		reg = <0x2a 0x6>;
+	};
+
+	eeprom_factory: eeprom@0 {
+		reg = <0x0 0x1000>;
+	};
 };
