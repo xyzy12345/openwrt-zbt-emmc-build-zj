@@ -20,7 +20,7 @@ env:
   OPENWRT_VERSION: "24.10.4"
   TARGET: "mediatek"
   SUBTARGET: "filogic"
-  DEVICE: "zbtlink_zbt-z8102ax-v2-emmc"
+  DEVICE: "zbtlink_z8102ax-emmc"
   
 jobs:
   build:
