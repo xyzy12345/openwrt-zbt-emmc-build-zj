@@ -74,12 +74,19 @@
 		};
 	};
 
+	/*
+	 * Hardware GPIO watchdog - disabled by default
+	 * This can cause reboot loops if the watchdog daemon is not running.
+	 * Enable only if you have a watchdog service configured.
+	 */
+	/*
 	watchdog {
 		compatible = "linux,wdt-gpio";
 		gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		hw_algo = "toggle";
 		hw_margin_ms = <1000>;
 	};
+	*/
 
 	gpio-export {
 		compatible = "gpio-export";
