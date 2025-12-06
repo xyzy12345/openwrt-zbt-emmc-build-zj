@@ -3,9 +3,8 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
-#include <dt-bindings/pinctrl/mt65xx.h>
 
-#include "mt7981b.dtsi"
+#include "mt7981.dtsi"
 
 / {
 	model = "ZBT-Z8102AX-eMMC";
@@ -22,7 +21,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs = "earlycon=uart8250,mmio32,0x11002000 console=ttyS0,115200n8 root=/dev/mmcblk0p6 rootwait";
+		bootargs = "earlycon=uart8250,mmio32,0x11002000 console=ttyS0,115200n8";
 	};
 
 	gpio-keys {
@@ -75,11 +74,18 @@
 		};
 	};
 
-	watchdog {
+	/*
+	 * Hardware GPIO watchdog on GPIO2
+	 * The board has an external hardware watchdog that requires toggling GPIO2.
+	 * hw_margin_ms is set to 250000ms (250 seconds) to provide enough time during boot.
+	 * The watchdog daemon must be configured to toggle this GPIO regularly.
+	 */
+	watchdog-gpio {
 		compatible = "linux,wdt-gpio";
 		gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		hw_algo = "toggle";
-		hw_margin_ms = <1000>;
+		hw_margin_ms = <250000>;
+		always-running;
 	};
 
 	gpio-export {
@@ -111,7 +117,7 @@
 		};
 	};
 
-	regulator-3p3v {
+	reg_3p3v: regulator-3p3v {
 		compatible = "regulator-fixed";
 		regulator-name = "fixed-3.3V";
 		regulator-min-microvolt = <3300000>;
@@ -128,7 +134,6 @@
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 		phy-mode = "2500base-x";
-		nvmem-cell-names = "mac-address";
 
 		fixed-link {
 			speed = <2500>;
@@ -143,6 +148,7 @@
 		phy-mode = "gmii";
 		phy-handle = <&int_gbe_phy>;
 		nvmem-cell-names = "mac-address";
+		nvmem-cells = <&macaddr_factory_02a>;
 	};
 };
 
@@ -156,14 +162,6 @@
 		interrupt-parent = <&pio>;
 		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
 	};
-
-	int_gbe_phy: ethernet-phy@0 {
-		compatible = "ethernet-phy-id03a2.9461";
-		reg = <0>;
-		nvmem-cell-names = "phy-cal-data";
-		nvmem-cells = <&phy_calibration>;
-		phy-mode = "gmii";
-	};
 };
 
 &switch {
@@ -174,21 +172,29 @@
 		port@0 {
 			reg = <0>;
 			label = "lan1";
+			nvmem-cell-names = "mac-address";
+			nvmem-cells = <&macaddr_factory_004>;
 		};
 
 		port@1 {
 			reg = <1>;
 			label = "lan2";
+			nvmem-cell-names = "mac-address";
+			nvmem-cells = <&macaddr_factory_004>;
 		};
 
 		port@2 {
 			reg = <2>;
 			label = "lan3";
+			nvmem-cell-names = "mac-address";
+			nvmem-cells = <&macaddr_factory_004>;
 		};
 
 		port@3 {
 			reg = <3>;
 			label = "lan4";
+			nvmem-cell-names = "mac-address";
+			nvmem-cells = <&macaddr_factory_004>;
 		};
 
 		port@6 {
@@ -214,29 +220,53 @@
 	bus-width = <8>;
 	max-frequency = <52000000>;
 	cap-mmc-highspeed;
-	mmc-hs200-1_8v;
 	non-removable;
-	vmmc-supply = <&regulator-3p3v>;
-	vqmmc-supply = <&regulator-3p3v>;
+	vmmc-supply = <&reg_3p3v>;
 	no-sd;
 	no-sdio;
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+			partitions {
+				block-partition-env {
+					partname = "u-boot-env";
+
+					nvmem-layout {
+						compatible = "u-boot,env";
+					};
+				};
+
+				emmc_factory: block-partition-factory {
+					partname = "factory";
+
+					nvmem-layout {
+						compatible = "fixed-layout";
+						#address-cells = <1>;
+						#size-cells = <1>;
+
+						eeprom_factory: eeprom@0 {
+							reg = <0x0 0x1000>;
+						};
+
+						macaddr_factory_004: macaddr@4 {
+							reg = <0x4 0x6>;
+						};
+
+						macaddr_factory_02a: macaddr@2a {
+							reg = <0x2a 0x6>;
+						};
+					};
+				};
+			};
+		};
+	};
 };
 
 &pio {
-	mmc0_pins_default: mmc0-pins-default {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
-	mmc0_pins_uhs: mmc0-pins-uhs {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
 	gpio-line-names =
 		"mesh",		/* GPIO0 */
 		"reset",	/* GPIO1 */
@@ -252,30 +282,23 @@
 		"blue_led",	/* GPIO11 */
 		"",		/* GPIO12 */
 		"4g2_led",	/* GPIO13 */
-		"", "","", "", "", "", "", "",	/* GPIO14-21 */
+		"", "", "", "", "", "", "", "",	/* GPIO14-21 */
 		"", "", "", "", "", "", "", "",	/* GPIO22-29 */
 		"", "", "", "", "", "", "", "",	/* GPIO30-37 */
 		"switch_irq",	/* GPIO38 */
-		"switch_reset",	/* GPIO39 */
-		"", "", "", "", "", "", "",	/* GPIO40-46 */
-		"", "", "", "", "", "";		/* GPIO47-52 */
+		"switch_reset";	/* GPIO39 */
 
-	spi0_flash_pins: spi0-pins {
+	mmc0_pins_default: mmc0-pins-default {
 		mux {
-			function = "spi";
-			groups = "spi0", "spi0_wp_hold";
+			function = "flash";
+			groups = "emmc_45";
 		};
+	};
 
-		conf-pu {
-			pins = "SPI0_CS", "SPI0_HOLD", "SPI0_WP";
-			drive-strength = <MTK_DRIVE_8mA>;
-			bias-pull-up;
-		};
-
-		conf-pd {
-			pins = "SPI0_CLK", "SPI0_MOSI", "SPI0_MISO";
-			drive-strength = <MTK_DRIVE_8mA>;
-			bias-pull-down;
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
 		};
 	};
 };
@@ -300,25 +323,4 @@
 	status = "okay";
 	nvmem-cells = <&eeprom_factory>;
 	nvmem-cell-names = "eeprom";
-};
-
-&efuse {
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	phy_calibration: calib@8dc {
-		reg = <0x8dc 0x10>;
-	};
-
-	macaddr_factory_004: macaddr@4 {
-		reg = <0x4 0x6>;
-	};
-
-	macaddr_factory_02a: macaddr@2a {
-		reg = <0x2a 0x6>;
-	};
-
-	eeprom_factory: eeprom@0 {
-		reg = <0x0 0x1000>;
-	};
 };
