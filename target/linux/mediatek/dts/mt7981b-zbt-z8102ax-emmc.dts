@@ -220,10 +220,8 @@
 	bus-width = <8>;
 	max-frequency = <52000000>;
 	cap-mmc-highspeed;
-	mmc-hs200-1_8v;
 	non-removable;
 	vmmc-supply = <&reg_3p3v>;
-	vqmmc-supply = <&reg_3p3v>;
 	no-sd;
 	no-sdio;
 
