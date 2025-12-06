@@ -66,6 +66,10 @@ jobs:
         git clone --depth=1 https://github.com/openwrt/openwrt.git --branch v${{ env.OPENWRT_VERSION }}
         cd openwrt
         
+        # Add custom feeds for Argon theme
+        echo "src-git argon https://github.com/jerrykuku/luci-theme-argon.git;master" >> feeds.conf.default
+        echo "src-git argonconfig https://github.com/jerrykuku/luci-app-argon-config.git;master" >> feeds.conf.default
+        
         # 复制DTS文件到正确的位置
         if [ -f ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
           echo "复制DTS文件..."
