@@ -75,18 +75,18 @@
 	};
 
 	/*
-	 * Hardware GPIO watchdog - disabled by default
-	 * This can cause reboot loops if the watchdog daemon is not running.
-	 * Enable only if you have a watchdog service configured.
+	 * Hardware GPIO watchdog on GPIO2
+	 * The board has an external hardware watchdog that requires toggling GPIO2.
+	 * hw_margin_ms is set to 250000ms (250 seconds) to provide enough time during boot.
+	 * The watchdog daemon must be configured to toggle this GPIO regularly.
 	 */
-	/*
-	watchdog {
+	watchdog-gpio {
 		compatible = "linux,wdt-gpio";
 		gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
 		hw_algo = "toggle";
-		hw_margin_ms = <1000>;
+		hw_margin_ms = <250000>;
+		always-running;
 	};
-	*/
 
 	gpio-export {
 		compatible = "gpio-export";
