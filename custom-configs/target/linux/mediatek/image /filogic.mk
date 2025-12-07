@@ -2956,14 +2956,17 @@ TARGET_DEVICES += zyxel_nwa50ax-pro
 
 define Device/zbtlink_z8102ax-emmc
   DEVICE_VENDOR := ZBT
-  DEVICE_MODEL := Z8102AX-eMMC
+  DEVICE_MODEL := Z8102AX (eMMC)
   DEVICE_DTS := mt7981b-zbt-z8102ax-emmc
-  DEVICE_DTS_DIR := ../dts
+  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
   SUPPORTED_DEVICES := zbtlink,z8102ax-emmc
   DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
     kmod-usb3 kmod-usb2 kmod-mmc-mtk kmod-fs-ext4 \
     kmod-mtk-ppe kmod-hwmon-pwmfan
   IMAGES := sysupgrade.bin
-  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/sysupgrade.bin := sysupgrade-emmc | append-metadata
+  # 对于 eMMC/NAND 设备，通常需要以下设置以确保内核和ubootenv正确部署
+  UBOOTENV_IN_UBI := 1
+  KERNEL_IN_UBI := 1
 endef
 TARGET_DEVICES += zbtlink_z8102ax-emmc
