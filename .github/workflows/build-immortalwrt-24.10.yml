@@ -113,8 +113,7 @@ jobs:
           # 可选：自动调整DTS中的分区大小
           sed -i "s/partition@6 {.*size = <0 .*>/partition@6 { label = \"ubi\"; reg = <0x6 0x1c00000>; }/" \
             target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts || true
-        else
-      
+        fi
 
         # 复制设备定义
         if [ -f ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk ]; then
