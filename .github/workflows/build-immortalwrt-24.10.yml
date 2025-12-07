@@ -119,7 +119,7 @@ jobs:
         if [ -f ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk ]; then
           echo "复制eMMC专用设备定义文件..."
           mkdir -p target/linux/mediatek/image/
-          cp ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk target/linux/mediatek/image/
+          cp ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk target/linux/mediatek/image/filogic.mk
         fi
 
     - name: 更新和安装软件源
