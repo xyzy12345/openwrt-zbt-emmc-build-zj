@@ -115,7 +115,6 @@ jobs:
             target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts || true
         else
       
-        fi
 
         # 复制设备定义
         if [ -f ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk ]; then
