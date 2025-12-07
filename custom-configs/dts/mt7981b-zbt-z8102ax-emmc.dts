@@ -216,10 +216,69 @@
 	cap-mmc-highspeed;
 	mmc-hs200-1_8v;
 	non-removable;
-	vmmc-supply = <&regulator-3p3v>;
-	vqmmc-supply = <&regulator-3p3v>;
+	vmmc-supply = <&regulator_3p3v>;
+	vqmmc-supply = <&regulator_3p3v>;
 	no-sd;
 	no-sdio;
+
+	// ============ 分区表定义（根据你的 fdisk 信息精确计算）============
+	partitions {
+		compatible = "fixed-partitions";
+		// 使用 2 cells 表示地址和大小，以支持超过 4GB 的寻址
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		// 第1分区: mmcblk0p1 (可能是预留给 GPT 或引导的非常小的分区)
+		partition@0 {
+			label = "preloader";
+			reg = <0x0 0x0 0x0 0x4400>; // 起始 0x0， 大小 0x4400 (17KB)
+			read-only;
+		};
+
+		// 第2分区: mmcblk0p2
+		partition@1 {
+			label = "ATF";
+			reg = <0x0 0x100000 0x0 0x80000>; // 起始 0x100000，大小 0x80000 (512KB)
+			read-only;
+		};
+
+		// 第3分区: mmcblk0p3
+		partition@2 {
+			label = "u-boot-env";
+			reg = <0x0 0x120000 0x0 0x200000>; // 起始 0x120000，大小 0x200000 (2MB)
+			read-only;
+		};
+
+		// 第4分区: mmcblk0p4
+		partition@3 {
+			label = "factory";
+			reg = <0x0 0x1A0000 0x0 0x200000>; // 起始 0x1A0000，大小 0x200000 (2MB)
+			read-only;
+		};
+
+		// 第5分区: mmcblk0p5 (可能是 FIP 或 bl2/uboot)
+		partition@4 {
+			label = "fip";
+			reg = <0x0 0x220000 0x0 0x2000000>; // 起始 0x220000，大小 0x2000000 (32MB)
+			read-only;
+		};
+
+		// ====== 关键：第6分区 - 系统分区 (mmcblk0p6, 7G) ======
+		// 这个分区将存放 ImmortalWrt 的系统和内核
+		partition@5 {
+			label = "ubi";
+			reg = <0x0 0x2880000 0x1 0xBD000000>; // 起始 0x2880000，大小 0x1BD000000 (~7.45GB)
+			// 注意：实际可用的 UBI 系统分区会略小于此值，这是正常现象。
+		};
+
+		// ====== 关键：第7分区 - 数据分区 (mmcblk0p7, 105G) ======
+		// 这个分区将在启动后被挂载为 /opt 或 /mnt/data，用于存储用户数据
+		partition@6 {
+			label = "opt";
+			reg = <0x1 0xC0A00000 0x1A 0x40000000>; // 起始 0x1C0A00000，大小 0x1A40000000 (~105GB)
+			read-only; // 在编译和刷机时设为只读，防止被系统镜像覆盖。启动后可由系统重新挂载为读写。
+		};
+	};
 };
 
 &pio {
