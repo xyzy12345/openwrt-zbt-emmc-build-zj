@@ -174,7 +174,7 @@ jobs:
           CONFIG_PACKAGE_fdisk=y
           CONFIG_PACKAGE_blkid=y
           CONFIG_PACKAGE_lsblk=y
-          EOF
+EOF
         fi
 
         # 应用自定义软件包选择
@@ -197,7 +197,7 @@ jobs:
           CONFIG_PACKAGE_kmod-fs-overlay=y
           CONFIG_PACKAGE_block-mount=y
           CONFIG_PACKAGE_f2fs-tools=y
-          EOF
+EOF
         fi
 
         # 根据你的分区信息，添加自动挂载大容量分区的配置
@@ -215,7 +215,7 @@ jobs:
         CONFIG_PACKAGE_f2fsck=y
         CONFIG_PACKAGE_mkf2fs=y
         CONFIG_PACKAGE_resize2fs=y
-        EOF
+EOF
 
         # 最终验证配置
         echo "验证配置并解决依赖..."
