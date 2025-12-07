@@ -1,376 +1,337 @@
-name: Build ImmortalWrt 24.10.4 for ZBT-Z8102AX-eMMC (MT7981B)
+name: Build ImmortalWrt 24.10.4 for ZBT-Z8102AX-eMMC
 
 on:
   push:
-    branches: [ main, master, openwrt-24.10 ]
+    branches: [ main, master ]
     paths:
+      - '.github/workflows/build-immortalwrt.yml'
       - 'configs/**'
       - 'dts/**'
-      - 'patches/**'
       - 'target/linux/mediatek/**'
-      - '.github/workflows/build-immortalwrt-24.10.yml'
   pull_request:
-    branches: [ main, master, openwrt-24.10 ]
+    branches: [ main, master ]
   schedule:
     - cron: '0 2 * * 0'  # 每周日UTC 2点自动构建
   workflow_dispatch:
     inputs:
       clean_build:
-        description: '清除构建缓存（会显著增加编译时间）'
+        description: '完全清理构建（清除所有缓存，编译时间显著增加）'
         required: false
         default: 'false'
       skip_download:
-        description: '跳过下载阶段（使用已有dl缓存）'
+        description: '跳过源码下载阶段（使用已有dl缓存）'
         required: false
         default: 'false'
 
 env:
-  IMMORTALWRT_BRANCH: "openwrt-24.10"
-  IMMORTALWRT_VERSION: "24.10.4"
+  IMMORTALWRT_REPO: "https://github.com/immortalwrt/immortalwrt"
+  IMMORTALWRT_BRANCH: "master"  # master分支包含最新的24.10.4
   TARGET: "mediatek"
   SUBTARGET: "filogic"
-  DEVICE: "zbtlink_z8102ax-emmc"
-  # 根据你的分区信息调整（单位：MiB）
-  EMMC_SYSTEM_SIZE: "7168"    # mmcblk0p6: 7G = 7168 MiB
-  EMMC_ROOTFS_SIZE: "107520"  # mmcblk0p7: 105G ≈ 107520 MiB
+  DEVICE_NAME: "zbtlink_z8102ax-emmc"
+  DEVICE_DISPLAY_NAME: "ZBT Z8102AX (eMMC, MT7981B)"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04  # 使用更新的系统以获得更好的工具链支持
-    timeout-minutes: 300    # 延长超时时间，首次编译可能较久
+    runs-on: ubuntu-22.04  # 使用稳定版本，兼容性更好
+    timeout-minutes: 360    # 延长至6小时，首次编译可能需要更长时间
 
     steps:
-    - name: 检出自定义配置
+    - name: 检出配置文件
       uses: actions/checkout@v4
       with:
-        path: custom-configs
+        path: config-files
         fetch-depth: 0
 
-    - name: 设置构建环境
+    - name: 设置编译环境
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
           ccache \
-          ecj \
-          fastjar \
-          file \
+          clang \
+          flex \
+          bison \
           g++ \
           gawk \
+          gcc-multilib \
           gettext \
           git \
-          java-propose-classpath \
-          libelf-dev \
           libncurses5-dev \
-          libncursesw5-dev \
           libssl-dev \
           python3 \
-          python3-lib2to3 \
+          python3-setuptools \
           python3-dev \
           rsync \
           unzip \
           wget \
-          xsltproc \
           zlib1g-dev \
-          upx \
-          cmake \
-          pkg-config \
-          flex \
-          bison \
-          curl
-
+          file \
+          subversion \
+          time \
+          xsltproc \
+          libxml-parser-perl \
+          curl \
+          upx
+        
         # 配置ccache缓存
         sudo mkdir -p /opt/ccache
         sudo chmod 777 /opt/ccache
         echo "CCACHE_DIR=/opt/ccache" >> $GITHUB_ENV
         echo "/usr/lib/ccache" >> $GITHUB_PATH
-        ccache -M 10G
+        ccache -M 8G
         ccache -s
 
-    - name: 克隆 ImmortalWrt 24.10.4 源码
+    - name: 克隆 ImmortalWrt 源码
       run: |
         echo "正在克隆 ImmortalWrt ${{ env.IMMORTALWRT_BRANCH }} 分支..."
-        git clone https://github.com/immortalwrt/immortalwrt.git \
+        git clone ${{ env.IMMORTALWRT_REPO }} \
           --branch ${{ env.IMMORTALWRT_BRANCH }} \
           --single-branch \
           --depth=1
-
+        
         cd immortalwrt
-
-        # 验证分支版本（可选，用于调试）
-        git log --oneline -3
-
-        # 克隆子模块
-        echo "初始化子模块..."
+        
+        echo "当前分支版本信息:"
+        git log --oneline -2
+        
+        # 初始化子模块
         git submodule update --init --recursive
-
-        # 应用自定义DTS（根据你的分区信息优化）
-        if [ -f ../custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
-          echo "复制并调整DTS文件以匹配你的分区布局..."
+        
+        # 复制设备树文件 (DTS) - 必需
+        if [ -f ../config-files/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          echo "复制设备树文件..."
           mkdir -p target/linux/mediatek/dts/
-          cp ../custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
-
-          # 可选：自动调整DTS中的分区大小
-          sed -i "s/partition@6 {.*size = <0 .*>/partition@6 { label = \"ubi\"; reg = <0x6 0x1c00000>; }/" \
-            target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts || true
+          cp ../config-files/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
+          echo "DTS 文件已部署"
+        else
+          echo "错误：未找到必需的 DTS 文件！"
+          echo "请在 config-files/dts/ 目录下创建 mt7981b-zbt-z8102ax-emmc.dts 文件"
+          exit 1
         fi
-
-        # 复制设备定义
-        if [ -f ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk ]; then
-          echo "复制eMMC专用设备定义文件..."
+        
+        # 复制设备定义文件 - 必需
+        if [ -f ../config-files/target/linux/mediatek/image/filogic.mk ]; then
+          echo "复制设备定义文件..."
           mkdir -p target/linux/mediatek/image/
-          cp ../custom-configs/target/linux/mediatek/image/filogic-emmc.mk target/linux/mediatek/image/
+          cp ../config-files/target/linux/mediatek/image/filogic.mk target/linux/mediatek/image/
+          echo "设备定义文件已部署"
+        else
+          echo "警告：未找到自定义设备定义，将尝试使用默认配置"
+        fi
+        
+        # 复制补丁文件（可选）
+        if [ -d ../config-files/patches/ ] && [ -n "$(ls -A ../config-files/patches/ 2>/dev/null)" ]; then
+          echo "复制补丁文件..."
+          mkdir -p target/linux/mediatek/patches-5.15/
+          cp ../config-files/patches/*.patch target/linux/mediatek/patches-5.15/ 2>/dev/null || true
         fi
 
     - name: 更新和安装软件源
       run: |
         cd immortalwrt
-
-        echo "更新软件源列表..."
+        
+        echo "更新软件源..."
         ./scripts/feeds update -a
-
-        echo "安装基础软件包..."
+        echo "安装软件包..."
         ./scripts/feeds install -a
 
-        # 安装额外工具（针对eMMC设备）
-        ./scripts/feeds install e2fsprogs
-        ./scripts/feeds install blkid
-        ./scripts/feeds install lsblk
-        ./scripts/feeds install fdisk
-
-    - name: 配置 ImmortalWrt
+    - name: 配置编译选项
       run: |
         cd immortalwrt
-
+        
         # 清理选项
         if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
-          echo "执行完全清理..."
+          echo "执行完全清理构建..."
           make clean
-          rm -rf tmp .config* feeds
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          rm -rf tmp .config* staging_dir build_dir
         fi
-
-        # 生成默认配置
-        echo "配置目标平台：${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        
+        echo "=== 步骤1：生成基础配置 ==="
         make defconfig
-
-        # 应用设备配置
-        if [ -f ../custom-configs/configs/zbtlink_z8102ax-emmc.config ]; then
-          echo "应用设备专属配置..."
-          cat ../custom-configs/configs/zbtlink_z8102ax-emmc.config >> .config
+        
+        echo "=== 步骤2：应用设备配置 ==="
+        if [ -f ../config-files/configs/zbtlink_z8102ax-emmc.config ]; then
+          echo "使用自定义设备配置..."
+          cat ../config-files/configs/zbtlink_z8102ax-emmc.config >> .config
         else
-          # 基础配置 - 针对eMMC设备优化
-          echo "应用基础eMMC配置..."
-          {
-            echo "CONFIG_TARGET_mediatek=y"
-            echo "CONFIG_TARGET_mediatek_filogic=y"
-            echo "CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y"
-            echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y"
-            echo "CONFIG_TARGET_ROOTFS_PARTSIZE=${{ env.EMMC_SYSTEM_SIZE }}"
-            echo "CONFIG_PACKAGE_kmod-fs-ext4=y"
-            echo "CONFIG_PACKAGE_kmod-mmc=y"
-            echo "CONFIG_PACKAGE_e2fsprogs=y"
-            echo "CONFIG_PACKAGE_fdisk=y"
-            echo "CONFIG_PACKAGE_blkid=y"
-            echo "CONFIG_PACKAGE_lsblk=y"
-          } >> .config
+          echo "错误：未找到设备配置文件！"
+          echo "请在 config-files/configs/ 目录下创建 zbtlink_z8102ax-emmc.config"
+          exit 1
         fi
+        
+        # 添加必需的核心配置（确保eMMC和UBIFS支持）
+        echo "=== 步骤3：添加核心配置 ==="
+        cat << 'EOF' >> .config
+# 核心配置 - 针对eMMC设备
+CONFIG_TARGET_ROOTFS_UBIFS=y
+CONFIG_TARGET_UBIFS_FREE_SPACE_FIXUP=y
+CONFIG_TARGET_UBIFS_JOURNAL_SIZE=32
 
-        # 应用自定义软件包选择
-        if [ -f ../custom-configs/configs/custom-packages.config ]; then
-          echo "应用自定义软件包选择..."
-          cat ../custom-configs/configs/custom-packages.config >> .config
-        else
-          # 推荐的基础软件包
-          echo "添加推荐软件包..."
-          {
-            echo "CONFIG_PACKAGE_luci=y"
-            echo "CONFIG_PACKAGE_luci-compat=y"
-            echo "CONFIG_PACKAGE_luci-app-ttyd=y"
-            echo "CONFIG_PACKAGE_luci-app-statistics=y"
-            echo "CONFIG_PACKAGE_htop=y"
-            echo "CONFIG_PACKAGE_vim-full=y"
-            echo "CONFIG_PACKAGE_curl=y"
-            echo "CONFIG_PACKAGE_openssh-sftp-server=y"
-            echo "# 启用overlayfs以充分利用eMMC空间"
-            echo "CONFIG_PACKAGE_kmod-fs-overlay=y"
-            echo "CONFIG_PACKAGE_block-mount=y"
-            echo "CONFIG_PACKAGE_f2fs-tools=y"
-          } >> .config
+# eMMC驱动支持
+CONFIG_PACKAGE_kmod-mmc=y
+CONFIG_PACKAGE_kmod-mmc-mtk=y
+CONFIG_PACKAGE_kmod-mtk-sd=y
+
+# 文件系统支持
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_e2fsprogs=y
+CONFIG_PACKAGE_fdisk=y
+CONFIG_PACKAGE_lsblk=y
+CONFIG_PACKAGE_blkid=y
+
+# 自动挂载数据分区
+CONFIG_PACKAGE_block-mount=y
+
+# 基础工具
+CONFIG_PACKAGE_openssh-server=y
+CONFIG_PACKAGE_openssh-client=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_iperf3=y
+
+# LuCI界面
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-ssl-openssl=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-app-opkg=y
+EOF
+        
+        echo "=== 步骤4：应用自定义软件包 ==="
+        if [ -f ../config-files/configs/custom-packages.config ]; then
+          echo "添加自定义软件包..."
+          cat ../config-files/configs/custom-packages.config >> .config
         fi
-
-        # 根据你的分区信息，添加自动挂载大容量分区的配置
-        echo "添加eMMC大分区自动挂载配置..."
-        {
-          echo "# 自动挂载mmcblk0p7到/opt（根据你的分区信息）"
-          echo "CONFIG_PACKAGE_automount=y"
-          echo "CONFIG_PACKAGE_kmod-fs-ext4=y"
-          echo "CONFIG_PACKAGE_kmod-usb-storage=y"
-          echo "CONFIG_PACKAGE_kmod-usb-storage-extras=y"
-          echo "# 文件系统工具"
-          echo "CONFIG_PACKAGE_badblocks=y"
-          echo "CONFIG_PACKAGE_dosfstools=y"
-          echo "CONFIG_PACKAGE_e2fsprogs=y"
-          echo "CONFIG_PACKAGE_f2fsck=y"
-          echo "CONFIG_PACKAGE_mkf2fs=y"
-          echo "CONFIG_PACKAGE_resize2fs=y"
-        } >> .config
-
-        # 最终验证配置
-        echo "验证配置并解决依赖..."
+        
+        echo "=== 步骤5：验证配置 ==="
         make defconfig
         make oldconfig
+        
+        # 显示关键配置
+        echo "=== 关键配置检查 ==="
+        echo "目标平台:"
+        grep "^CONFIG_TARGET" .config | head -5
+        echo "文件系统:"
+        grep "UBIFS\|SQUASHFS\|EXT4" .config | head -5
+        echo "eMMC驱动:"
+        grep "MMC\|EMMC" .config | head -5
 
-    - name: 下载软件包源码
+    - name: 下载源码包
       if: github.event.inputs.skip_download != 'true'
       run: |
         cd immortalwrt
-
-        echo "开始下载软件包源码（使用国内镜像加速）..."
-
-        # 可选的镜像替换（针对国内网络环境）
-        # sed -i 's|https://github.com|https://ghproxy.com/https://github.com|g' feeds.conf.default
-
-        # 下载源码
-        for i in {1..3}; do
-          echo "尝试第 $i 次下载..."
-          if make download -j$(nproc); then
+        
+        echo "开始下载源码包..."
+        
+        # 尝试多次下载，提高成功率
+        for attempt in {1..3}; do
+          echo "下载尝试 #$attempt"
+          if make download -j$(nproc) 2>&1 | tee download.log; then
             echo "下载成功！"
             break
-          elif [ $i -eq 3 ]; then
+          elif [ $attempt -eq 3 ]; then
             echo "下载失败，尝试单线程下载..."
-            make download -j1 V=s
+            make download -j1 V=s 2>&1 | tee download_single.log
           fi
-          sleep 5
+          sleep 10
         done
-
+        
         # 清理无效的下载文件
         find dl -size -1024c -delete 2>/dev/null || true
-        find dl -name "*.tmp" -delete 2>/dev/null || true
 
     - name: 编译 ImmortalWrt
       run: |
         cd immortalwrt
-
-        # 计算编译线程数（留出内存空间）
+        
+        echo "=== 编译信息 ==="
+        echo "设备: ${{ env.DEVICE_DISPLAY_NAME }}"
+        echo "目标: ${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        echo "日期: $(date)"
+        
+        # 智能计算并行编译数
         CPU_CORES=$(nproc)
         MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
-
+        
         # 根据内存调整并行度
-        if [ $MEM_GB -lt 8 ]; then
+        if [ $MEM_GB -lt 6 ]; then
           BUILD_JOBS=$((CPU_CORES / 2))
-          echo "内存较低($MEM_GB GB)，使用 $BUILD_JOBS 个线程"
+          echo "内存较低 ($MEM_GB GB)，使用 $BUILD_JOBS 线程"
+        elif [ $MEM_GB -lt 12 ]; then
+          BUILD_JOBS=$CPU_CORES
+          echo "内存中等 ($MEM_GB GB)，使用 $BUILD_JOBS 线程"
         else
-          BUILD_JOBS=$((CPU_CORES))
-          echo "内存充足($MEM_GB GB)，使用 $BUILD_JOBS 个线程"
+          BUILD_JOBS=$((CPU_CORES * 2))
+          echo "内存充足 ($MEM_GB GB)，使用 $BUILD_JOBS 线程"
         fi
-
-        echo "开始编译 ImmortalWrt ${{ env.IMMORTALWRT_VERSION }}..."
-        echo "编译设备: ${{ env.DEVICE }} (MT7981B eMMC)"
-        echo "系统分区大小: ${{ env.EMMC_SYSTEM_SIZE }} MiB"
-        echo "数据分区大小: ${{ env.EMMC_ROOTFS_SIZE }} MiB"
-
-        # 编译固件
-        time make -j$BUILD_JOBS V=s 2>&1 | tee build_full.log
-
+        
+        # 设置编译环境变量
+        export FORCE_UNSAFE_CONFIGURE=1
+        
+        echo "=== 开始编译 ==="
+        time make -j$BUILD_JOBS V=s 2>&1 | tee build.log
+        
+        echo "=== 编译完成 ==="
+        
         # 检查编译结果
-        echo "=== 编译完成，检查产出文件 ==="
-
-        # 查找固件文件
-        FIRMWARE_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
-
-        if [ -d "$FIRMWARE_DIR" ]; then
-          echo "找到产出目录，内容如下:"
-          ls -la $FIRMWARE_DIR/
-
-          # 查找特定固件
-          SYSUPGRADE_FILE=$(find $FIRMWARE_DIR -name "*sysupgrade*.bin" -o -name "*${{ env.DEVICE }}*.bin" | head -1)
-
-          if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
-            echo "✅ 主要固件文件: $(basename $SYSUPGRADE_FILE)"
-            echo "   文件大小: $(ls -lh $SYSUPGRADE_FILE | awk '{print $5}')"
-            echo "   SHA256: $(sha256sum $SYSUPGRADE_FILE | cut -d' ' -f1)"
-
-            # 检查固件是否包含eMMC支持
-            if strings $SYSUPGRADE_FILE | grep -q "mmcblk"; then
+        FIRMWARE_PATH="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        
+        if [ -d "$FIRMWARE_PATH" ]; then
+          echo "固件输出目录内容:"
+          ls -la $FIRMWARE_PATH/
+          
+          # 查找固件文件
+          SYSUPGRADE_FILE=$(find $FIRMWARE_PATH -name "*sysupgrade*.bin" -type f | head -1)
+          
+          if [ -f "$SYSUPGRADE_FILE" ]; then
+            echo "✅ 编译成功！"
+            echo "固件文件: $(basename $SYSUPGRADE_FILE)"
+            echo "文件大小: $(ls -lh "$SYSUPGRADE_FILE" | awk '{print $5}')"
+            echo "MD5: $(md5sum "$SYSUPGRADE_FILE" | cut -d' ' -f1)"
+            echo "SHA256: $(sha256sum "$SYSUPGRADE_FILE" | cut -d' ' -f1)"
+            
+            # 验证固件包含eMMC支持
+            if strings "$SYSUPGRADE_FILE" | grep -q "mmcblk"; then
               echo "✅ 固件包含eMMC驱动支持"
             else
-              echo "⚠️  警告：固件可能不包含eMMC驱动"
+              echo "⚠️  警告：固件可能缺少eMMC驱动"
             fi
           else
             echo "❌ 未找到sysupgrade固件"
-            find $FIRMWARE_DIR -type f -name "*.bin" | head -5 | while read f; do
-              echo "  可用文件: $(basename $f) ($(ls -lh $f | awk '{print $5}'))"
+            echo "可用的bin文件:"
+            find $FIRMWARE_PATH -name "*.bin" -type f | while read f; do
+              echo "  - $(basename $f) ($(ls -lh "$f" | awk '{print $5}'))"
             done
           fi
         else
-          echo "❌ 产出目录不存在: $FIRMWARE_DIR"
+          echo "❌ 固件输出目录不存在"
+          echo "编译可能失败，请检查build.log"
           exit 1
         fi
 
     - name: 上传固件产物
-      if: success() || failure()
       uses: actions/upload-artifact@v4
+      if: always()
       with:
-        name: immortalwrt-${{ env.IMMORTALWRT_VERSION }}-${{ env.DEVICE }}
+        name: immortalwrt-${{ env.DEVICE_NAME }}-firmware
         path: |
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/config.buildinfo
-        retention-days: 90
-
-    - name: 上传软件包
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: immortalwrt-${{ env.IMMORTALWRT_VERSION }}-packages
-        path: |
-          immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/
-          immortalwrt/bin/packages/
         retention-days: 30
+        if-no-files-found: warn
 
     - name: 上传编译日志
-      if: always()
       uses: actions/upload-artifact@v4
+      if: always()
       with:
-        name: immortalwrt-${{ env.IMMORTALWRT_VERSION }}-logs
+        name: immortalwrt-${{ env.DEVICE_NAME }}-logs
         path: |
-          immortalwrt/build_full.log
+          immortalwrt/build.log
           immortalwrt/.config
-          immortalwrt/logs/
         retention-days: 7
 
-    - name: 显示ccache统计
+    - name: 显示缓存统计
       if: always()
       run: |
-        echo "=== CCache 统计信息 ==="
+        echo "=== 编译缓存统计 ==="
         ccache -s
-        echo "缓存目录: $CCACHE_DIR"
-        du -sh $CCACHE_DIR 2>/dev/null || echo "无法统计缓存目录大小"
-
-    - name: 创建GitHub发布（仅标签触发）
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        files: |
-          immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*-sysupgrade.bin
-          immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        body: |
-          ImmortalWrt ${{ env.IMMORTALWRT_VERSION }} 构建 - ${{ env.DEVICE }}
-
-          **设备信息**:
-          - 芯片: MediaTek MT7981B (Filogic 820)
-          - 存储: eMMC (Y0S128)
-          - 系统分区: ${{ env.EMMC_SYSTEM_SIZE }} MiB (mmcblk0p6)
-          - 数据分区: ${{ env.EMMC_ROOTFS_SIZE }} MiB (mmcblk0p7)
-
-          **刷机提示**:
-          1. 使用 `*-sysupgrade.bin` 文件通过原系统升级
-          2. 刷机后，105G数据分区会自动挂载到 `/opt`
-          3. 首次启动可能需要2-3分钟初始化
