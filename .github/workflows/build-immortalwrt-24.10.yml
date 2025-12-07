@@ -171,8 +171,6 @@ jobs:
             	CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y
             	CONFIG_TARGET_ROOTFS_SQUASHFS=y
             	CONFIG_TARGET_ROOTFS_PARTSIZE=${{ env.EMMC_SYSTEM_SIZE }}
-            	CONFIG_GRUB_IMAGES=y
-            	CONFIG_GRUB_EFI_IMAGES=y
             	CONFIG_PACKAGE_kmod-fs-ext4=y
             	CONFIG_PACKAGE_kmod-mmc=y
             	CONFIG_PACKAGE_e2fsprogs=y
