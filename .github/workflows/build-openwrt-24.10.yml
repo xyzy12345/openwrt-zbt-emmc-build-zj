@@ -1,0 +1,495 @@
+name: Build OpenWrt 24.10.4 for ZBT-Z8102AX-eMMC
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'custom-configs/**'
+      - '.github/workflows/build-openwrt-24.10.yml'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      clean_build:
+        description: '清除构建缓存（会增加编译时间）'
+        required: false
+        default: 'false'
+      skip_download:
+        description: '跳过下载阶段（使用已有dl缓存）'
+        required: false
+        default: 'false'
+      build_jobs:
+        description: '并行编译任务数（默认自动，数字越大编译越快但需要更多内存）'
+        required: false
+        default: 'auto'
+
+env:
+  OPENWRT_VERSION: "24.10.4"
+  OPENWRT_BRANCH: "openwrt-24.10"
+  TARGET: "mediatek"
+  SUBTARGET: "filogic"
+  DEVICE: "zbtlink_z8102ax-emmc"
+  CONFIG_DIR: "custom-configs"
+  
+  # eMMC分区设置 - 与您的DTS文件保持一致
+  EMMC_PARTITION_6_SIZE: "7168"    # 7GB系统分区
+  EMMC_PARTITION_7_SIZE: "107520"  # 105GB数据分区
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    
+    steps:
+    # 第一步：检出您的仓库（包含所有自定义配置）
+    - name: 检出仓库内容
+      uses: actions/checkout@v4
+      with:
+        path: ${{ env.CONFIG_DIR }}
+        fetch-depth: 0
+
+    # 第二步：设置编译环境
+    - name: 设置构建环境
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          ccache \
+          ecj \
+          fastjar \
+          file \
+          g++ \
+          gawk \
+          gettext \
+          git \
+          libelf-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libssl-dev \
+          python3 \
+          python3-setuptools \
+          python3-dev \
+          python3-pip \
+          rsync \
+          unzip \
+          wget \
+          xsltproc \
+          zlib1g-dev \
+          cmake \
+          pkg-config \
+          flex \
+          bison \
+          subversion \
+          quilt \
+          upx \
+          libfdt-dev
+
+        # 配置ccache缓存
+        sudo mkdir -p /opt/ccache
+        sudo chmod 777 /opt/ccache
+        echo "CCACHE_DIR=/opt/ccache" >> $GITHUB_ENV
+        echo "/usr/lib/ccache" >> $GITHUB_PATH
+        ccache -M 15G
+        ccache -s
+
+    # 第三步：克隆OpenWrt 24.10.4官方源码
+    - name: 克隆 OpenWrt ${{ env.OPENWRT_VERSION }} 源码
+      run: |
+        echo "正在克隆 OpenWrt ${{ env.OPENWRT_BRANCH }} 分支 (版本: ${{ env.OPENWRT_VERSION }})..."
+        
+        # 克隆OpenWrt官方仓库
+        git clone https://git.openwrt.org/openwrt/openwrt.git \
+          --branch ${{ env.OPENWRT_BRANCH }} \
+          --single-branch \
+          --depth=1 \
+          openwrt-build
+
+        cd openwrt-build
+        
+        # 验证版本
+        echo "当前仓库版本信息:"
+        git log --oneline -3
+        
+        # 初始化子模块
+        echo "初始化子模块..."
+        git submodule update --init --recursive
+        
+        # 备份原始DTS和Makefile（可选）
+        mkdir -p backup/dts backup/image
+        if [ -f target/linux/${{ env.TARGET }}/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          cp target/linux/${{ env.TARGET }}/dts/mt7981b-zbt-z8102ax-emmc.dts backup/dts/
+        fi
+        if [ -f target/linux/${{ env.TARGET }}/image/filogic.mk ]; then
+          cp target/linux/${{ env.TARGET }}/image/filogic.mk backup/image/
+        fi
+
+    # 第四步：应用您的自定义配置
+    - name: 应用自定义配置
+      run: |
+        cd openwrt-build
+        
+        echo "应用自定义配置文件..."
+        
+        # 1. 复制DTS文件
+        if [ -f ../${{ env.CONFIG_DIR }}/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          echo "复制DTS文件..."
+          mkdir -p target/linux/${{ env.TARGET }}/dts/
+          cp ../${{ env.CONFIG_DIR }}/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/${{ env.TARGET }}/dts/
+          
+          # 验证DTS文件
+          echo "DTS文件内容前10行:"
+          head -20 target/linux/${{ env.TARGET }}/dts/mt7981b-zbt-z8102ax-emmc.dts
+        else
+          echo "错误：未找到DTS文件: ../${{ env.CONFIG_DIR }}/dts/mt7981b-zbt-z8102ax-emmc.dts"
+          exit 1
+        fi
+        
+        # 2. 复制设备定义文件
+        if [ -f ../${{ env.CONFIG_DIR }}/target/linux/mediatek/image/filogic.mk ]; then
+          echo "复制设备定义文件..."
+          mkdir -p target/linux/${{ env.TARGET }}/image/
+          cp ../${{ env.CONFIG_DIR }}/target/linux/mediatek/image/filogic.mk target/linux/${{ env.TARGET }}/image/
+          
+          # 检查设备定义是否包含zbtlink_z8102ax-emmc
+          if grep -q "zbtlink_z8102ax-emmc" target/linux/${{ env.TARGET }}/image/filogic.mk; then
+            echo "✅ 设备定义文件包含 zbtlink_z8102ax-emmc"
+          else
+            echo "⚠️  警告：设备定义文件可能不包含 zbtlink_z8102ax-emmc"
+          fi
+        else
+          echo "错误：未找到设备定义文件: ../${{ env.CONFIG_DIR }}/target/linux/mediatek/image/filogic.mk"
+          exit 1
+        fi
+        
+        # 3. 复制其他可能存在的配置文件
+        if [ -f ../${{ env.CONFIG_DIR }}/configs/zbtlink_z8102ax-emmc.config ]; then
+          echo "复制设备配置文件..."
+          cp ../${{ env.CONFIG_DIR }}/configs/zbtlink_z8102ax-emmc.config .
+        fi
+
+    # 第五步：更新和安装软件源
+    - name: 更新和安装软件源
+      run: |
+        cd openwrt-build
+        
+        echo "更新软件源..."
+        ./scripts/feeds update -a
+        
+        echo "安装所有软件包..."
+        ./scripts/feeds install -a
+        
+        # 特别安装eMMC相关工具
+        ./scripts/feeds install e2fsprogs
+        ./scripts/feeds install fdisk
+        ./scripts/feeds install lsblk
+        ./scripts/feeds install blkid
+        ./scripts/feeds install block-mount
+
+    # 第六步：配置OpenWrt
+    - name: 配置 OpenWrt
+      run: |
+        cd openwrt-build
+        
+        echo "当前目录: $(pwd)"
+        echo "目录内容:"
+        ls -la
+        
+        # 清理选项
+        if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+          echo "执行完全清理..."
+          make clean
+          rm -rf tmp .config* feeds
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+        fi
+        
+        # 生成默认配置
+        echo "生成默认配置..."
+        make defconfig
+        
+        # 检查目标平台支持
+        echo "检查目标平台: ${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        if ! make target/linux/compile; then
+          echo "❌ 错误：目标平台 ${{ env.TARGET }}/${{ env.SUBTARGET }} 可能不受支持"
+          exit 1
+        fi
+        
+        # 应用基本配置
+        echo "应用基本设备配置..."
+        
+        # 目标平台选择
+        echo "CONFIG_TARGET_mediatek=y" >> .config
+        echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+        echo "CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y" >> .config
+        
+        # 镜像类型
+        echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+        echo "CONFIG_TARGET_UBIFS_FREE_SPACE_FIXUP=y" >> .config
+        
+        # eMMC/MMC驱动支持
+        echo "CONFIG_PACKAGE_kmod-mmc=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-sdhci=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-sdhci-mtk=y" >> .config
+        echo "CONFIG_MTK_MMC=y" >> .config
+        
+        # 文件系统支持
+        echo "CONFIG_PACKAGE_kmod-fs-ext4=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-fs-f2fs=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-fs-vfat=y" >> .config
+        
+        # 工具和工具链
+        echo "CONFIG_PACKAGE_block-mount=y" >> .config
+        echo "CONFIG_PACKAGE_fdisk=y" >> .config
+        echo "CONFIG_PACKAGE_blkid=y" >> .config
+        echo "CONFIG_PACKAGE_lsblk=y" >> .config
+        echo "CONFIG_PACKAGE_e2fsprogs=y" >> .config
+        
+        # 基础网络和系统工具
+        echo "CONFIG_PACKAGE_iperf3=y" >> .config
+        echo "CONFIG_PACKAGE_htop=y" >> .config
+        echo "CONFIG_PACKAGE_vim-full=y" >> .config
+        echo "CONFIG_PACKAGE_curl=y" >> .config
+        
+        # 如果有自定义配置文件，应用它
+        if [ -f zbtlink_z8102ax-emmc.config ]; then
+          echo "应用自定义配置文件..."
+          cat zbtlink_z8102ax-emmc.config >> .config
+        fi
+        
+        # 最终验证配置
+        echo "验证配置..."
+        make defconfig
+        echo "配置摘要:"
+        grep -E "CONFIG_TARGET|CONFIG_PACKAGE" .config | head -30
+        
+        # 检查目标设备是否被正确选择
+        if grep -q "CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y" .config; then
+          echo "✅ 目标设备已正确配置: zbtlink_z8102ax-emmc"
+        else
+          echo "❌ 错误：目标设备未正确配置"
+          exit 1
+        fi
+
+    # 第七步：下载软件包源码（可选跳过）
+    - name: 下载软件包源码
+      if: github.event.inputs.skip_download != 'true'
+      run: |
+        cd openwrt-build
+        
+        echo "开始下载软件包源码..."
+        
+        # 尝试多次下载，提高成功率
+        for i in {1..3}; do
+          echo "第 $i 次尝试下载..."
+          if make download -j$(nproc) V=s; then
+            echo "✅ 下载成功"
+            break
+          elif [ $i -eq 3 ]; then
+            echo "❌ 下载失败，尝试单线程下载..."
+            make download -j1 V=s
+          fi
+          sleep 10
+        done
+        
+        # 清理无效文件
+        find dl -size -1024c -delete 2>/dev/null || true
+        find dl -name "*.tmp" -delete 2>/dev/null || true
+        find dl -name "*.part" -delete 2>/dev/null || true
+        
+        echo "下载目录大小:"
+        du -sh dl || true
+
+    # 第八步：编译OpenWrt固件
+    - name: 编译 OpenWrt
+      run: |
+        cd openwrt-build
+        
+        # 计算并行编译任务数
+        CPU_CORES=$(nproc)
+        MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
+        
+        # 根据用户输入或自动计算
+        if [[ "${{ github.event.inputs.build_jobs }}" != "auto" ]] && [[ "${{ github.event.inputs.build_jobs }}" =~ ^[0-9]+$ ]]; then
+          BUILD_JOBS=${{ github.event.inputs.build_jobs }}
+          echo "使用用户指定的编译任务数: $BUILD_JOBS"
+        else
+          # 自动计算（基于内存）
+          if [ $MEM_GB -lt 8 ]; then
+            BUILD_JOBS=$((CPU_CORES / 2))
+          elif [ $MEM_GB -lt 16 ]; then
+            BUILD_JOBS=$CPU_CORES
+          else
+            BUILD_JOBS=$((CPU_CORES * 2))
+          fi
+          echo "自动计算编译任务数: $BUILD_JOBS (CPU: $CPU_CORES, 内存: ${MEM_GB}GB)"
+        fi
+        
+        echo "开始编译 OpenWrt ${{ env.OPENWRT_VERSION }}..."
+        echo "目标设备: ${{ env.DEVICE }} (MT7981B eMMC)"
+        echo "系统分区: ${{ env.EMMC_PARTITION_6_SIZE }} MiB"
+        echo "数据分区: ${{ env.EMMC_PARTITION_7_SIZE }} MiB"
+        echo "并行任务数: $BUILD_JOBS"
+        
+        # 开始编译（详细输出便于调试）
+        START_TIME=$(date +%s)
+        
+        # 编译内核和基础系统
+        echo "阶段1: 编译工具链和内核..."
+        time make -j$BUILD_JOBS tools/compile 2>&1 | tee -a build_tools.log
+        time make -j$BUILD_JOBS toolchain/compile 2>&1 | tee -a build_toolchain.log
+        time make -j$BUILD_JOBS target/compile 2>&1 | tee -a build_target.log
+        
+        # 编译固件包
+        echo "阶段2: 编译固件包..."
+        time make -j$BUILD_JOBS package/compile 2>&1 | tee -a build_package.log
+        
+        # 编译镜像
+        echo "阶段3: 编译最终镜像..."
+        time make -j$BUILD_JOBS 2>&1 | tee build_full.log
+        
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        
+        echo "编译完成，总耗时: $((DURATION / 60))分钟$((DURATION % 60))秒"
+        
+        # 第九步：验证构建结果
+        echo "=== 验证构建结果 ==="
+        
+        FIRMWARE_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        
+        if [ ! -d "$FIRMWARE_DIR" ]; then
+          echo "❌ 错误：产出目录不存在: $FIRMWARE_DIR"
+          echo "可能编译过程出错，请检查日志"
+          exit 1
+        fi
+        
+        echo "产出目录内容:"
+        ls -la $FIRMWARE_DIR/
+        
+        # 检查.bin文件
+        BIN_FILES=$(find $FIRMWARE_DIR -type f -name "*.bin" 2>/dev/null || true)
+        BIN_COUNT=$(echo "$BIN_FILES" | wc -w)
+        
+        if [ "$BIN_COUNT" -eq 0 ]; then
+          echo "❌ 错误：未生成任何固件文件 (.bin)"
+          echo "详细检查目录内容:"
+          find $FIRMWARE_DIR -type f | head -20
+          echo "可能原因:"
+          echo "  1. 设备配置不正确"
+          echo "  2. DTS文件有语法错误"
+          echo "  3. 设备定义文件不正确"
+          echo "  4. 编译过程中出现错误"
+          exit 1
+        fi
+        
+        echo "✅ 成功生成 $BIN_COUNT 个固件文件"
+        
+        # 查找主要固件文件
+        SYSUPGRADE_FILE=$(find $FIRMWARE_DIR -name "*sysupgrade*.bin" -o -name "*${{ env.DEVICE }}*.bin" | head -1)
+        
+        if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
+          echo "✅ 主要固件文件: $(basename $SYSUPGRADE_FILE)"
+          echo "   文件大小: $(ls -lh "$SYSUPGRADE_FILE" | awk '{print $5}')"
+          echo "   SHA256: $(sha256sum "$SYSUPGRADE_FILE" | cut -d' ' -f1)"
+          
+          # 检查固件是否包含eMMC相关驱动
+          if strings "$SYSUPGRADE_FILE" | grep -q "mmc"; then
+            echo "✅ 固件包含MMC/eMMC驱动支持"
+          else
+            echo "⚠️  警告：固件可能不包含MMC/eMMC驱动"
+          fi
+        else
+          echo "⚠️  警告：未找到sysupgrade固件，列出所有.bin文件:"
+          find $FIRMWARE_DIR -type f -name "*.bin" | while read f; do
+            echo "  文件: $(basename $f) ($(ls -lh "$f" | awk '{print $5}'))"
+          done
+        fi
+        
+        # 检查sha256sums文件
+        if [ -f "$FIRMWARE_DIR/sha256sums" ]; then
+          echo "✅ 找到sha256sums文件"
+          echo "验证固件哈希:"
+          head -5 "$FIRMWARE_DIR/sha256sums"
+        fi
+        
+        # 保存构建信息
+        echo "构建信息:" > build_info.txt
+        echo "版本: OpenWrt ${{ env.OPENWRT_VERSION }}" >> build_info.txt
+        echo "设备: ${{ env.DEVICE }}" >> build_info.txt
+        echo "目标: ${{ env.TARGET }}/${{ env.SUBTARGET }}" >> build_info.txt
+        echo "时间: $(date)" >> build_info.txt
+        echo "Git提交: $(cd ../${{ env.CONFIG_DIR }} && git log --oneline -1)" >> build_info.txt
+        echo "编译时长: $((DURATION / 60))分钟$((DURATION % 60))秒" >> build_info.txt
+        
+        echo "✅ 构建验证完成"
+
+    # 第十步：上传固件产物
+    - name: 上传固件产物
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-${{ env.OPENWRT_VERSION }}-${{ env.DEVICE }}-固件
+        path: |
+          openwrt-build/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
+          openwrt-build/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
+          openwrt-build/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/config.buildinfo
+          openwrt-build/build_info.txt
+        if-no-files-found: error
+        retention-days: 90
+        compression-level: 0  # 固件文件已经是压缩格式
+
+    # 第十一步：上传软件包
+    - name: 上传软件包
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-${{ env.OPENWRT_VERSION }}-${{ env.DEVICE }}-软件包
+        path: |
+          openwrt-build/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/
+          openwrt-build/bin/packages/
+        if-no-files-found: warn
+        retention-days: 30
+
+    # 第十二步：上传编译日志（无论成功失败都上传）
+    - name: 上传编译日志
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-${{ env.OPENWRT_VERSION }}-${{ env.DEVICE }}-日志
+        path: |
+          openwrt-build/build_full.log
+          openwrt-build/build_tools.log
+          openwrt-build/build_toolchain.log
+          openwrt-build/build_target.log
+          openwrt-build/build_package.log
+          openwrt-build/.config
+        if-no-files-found: warn
+        retention-days: 30
+
+    # 第十三步：显示构建统计信息
+    - name: 显示构建统计
+      if: always()
+      run: |
+        echo "=== 构建统计信息 ==="
+        
+        # ccache统计
+        echo "CCache统计:"
+        ccache -s
+        
+        # 目录大小
+        echo "目录大小统计:"
+        if [ -d "openwrt-build" ]; then
+          cd openwrt-build
+          echo "openwrt-build目录:"
+          du -sh . || true
+          echo "dl目录:"
+          du -sh dl 2>/dev/null || echo "dl目录不存在"
+          echo "bin目录:"
+          du -sh bin 2>/dev/null || echo "bin目录不存在"
+        fi
+        
+        # 构建时间
+        if [ -f "openwrt-build/build_info.txt" ]; then
+          echo "构建信息摘要:"
+          cat openwrt-build/build_info.txt
+        fi
