@@ -130,25 +130,29 @@ jobs:
         
         echo "应用自定义配置文件..."
         
+        # 设置配置文件基础路径
+        CUSTOM_CONFIGS_BASE="../${{ env.CONFIG_DIR }}/custom-configs"
+        CONFIGS_BASE="../${{ env.CONFIG_DIR }}/configs"
+        
         # 1. 复制DTS文件
-        if [ -f ../${{ env.CONFIG_DIR }}/custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+        if [ -f "$CUSTOM_CONFIGS_BASE/dts/mt7981b-zbt-z8102ax-emmc.dts" ]; then
           echo "复制DTS文件..."
           mkdir -p target/linux/${{ env.TARGET }}/dts/
-          cp ../${{ env.CONFIG_DIR }}/custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/${{ env.TARGET }}/dts/
+          cp "$CUSTOM_CONFIGS_BASE/dts/mt7981b-zbt-z8102ax-emmc.dts" target/linux/${{ env.TARGET }}/dts/
           
           # 验证DTS文件
           echo "DTS文件内容前10行:"
           head -20 target/linux/${{ env.TARGET }}/dts/mt7981b-zbt-z8102ax-emmc.dts
         else
-          echo "错误：未找到DTS文件: ../${{ env.CONFIG_DIR }}/custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts"
+          echo "错误：未找到DTS文件: $CUSTOM_CONFIGS_BASE/dts/mt7981b-zbt-z8102ax-emmc.dts"
           exit 1
         fi
         
         # 2. 复制设备定义文件
-        if [ -f ../${{ env.CONFIG_DIR }}/custom-configs/target/linux/mediatek/image/filogic.mk ]; then
+        if [ -f "$CUSTOM_CONFIGS_BASE/target/linux/mediatek/image/filogic.mk" ]; then
           echo "复制设备定义文件..."
           mkdir -p target/linux/${{ env.TARGET }}/image/
-          cp ../${{ env.CONFIG_DIR }}/custom-configs/target/linux/mediatek/image/filogic.mk target/linux/${{ env.TARGET }}/image/
+          cp "$CUSTOM_CONFIGS_BASE/target/linux/mediatek/image/filogic.mk" target/linux/${{ env.TARGET }}/image/
           
           # 检查设备定义是否包含zbtlink_z8102ax-emmc
           if grep -q "zbtlink_z8102ax-emmc" target/linux/${{ env.TARGET }}/image/filogic.mk; then
@@ -157,14 +161,14 @@ jobs:
             echo "⚠️  警告：设备定义文件可能不包含 zbtlink_z8102ax-emmc"
           fi
         else
-          echo "错误：未找到设备定义文件: ../${{ env.CONFIG_DIR }}/custom-configs/target/linux/mediatek/image/filogic.mk"
+          echo "错误：未找到设备定义文件: $CUSTOM_CONFIGS_BASE/target/linux/mediatek/image/filogic.mk"
           exit 1
         fi
         
         # 3. 复制其他可能存在的配置文件
-        if [ -f ../${{ env.CONFIG_DIR }}/configs/zbtlink_z8102ax-emmc.config ]; then
+        if [ -f "$CONFIGS_BASE/zbtlink_z8102ax-emmc.config" ]; then
           echo "复制设备配置文件..."
-          cp ../${{ env.CONFIG_DIR }}/configs/zbtlink_z8102ax-emmc.config .
+          cp "$CONFIGS_BASE/zbtlink_z8102ax-emmc.config" .
         fi
 
     # 第五步：更新和安装软件源
