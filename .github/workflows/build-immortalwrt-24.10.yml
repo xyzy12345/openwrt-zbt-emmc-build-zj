@@ -267,6 +267,20 @@ jobs:
           echo "找到产出目录，内容如下:"
           ls -la $FIRMWARE_DIR/
 
+          # 查找所有 .bin 文件
+          BIN_COUNT=$(find $FIRMWARE_DIR -type f -name "*.bin" | wc -l)
+          
+          if [ "$BIN_COUNT" -eq 0 ]; then
+            echo "❌ 错误：编译完成但未生成任何固件文件 (.bin)"
+            echo "这可能是因为："
+            echo "  1. 编译过程中出现错误"
+            echo "  2. 设备配置不正确"
+            echo "  3. 目标设备定义缺失"
+            echo ""
+            echo "请检查编译日志 (build_full.log) 查看详细错误信息"
+            exit 1
+          fi
+
           # 查找特定固件
           SYSUPGRADE_FILE=$(find $FIRMWARE_DIR -name "*sysupgrade*.bin" -o -name "*${{ env.DEVICE }}*.bin" | head -1)
 
@@ -282,7 +296,7 @@ jobs:
               echo "⚠️  警告：固件可能不包含eMMC驱动"
             fi
           else
-            echo "❌ 未找到sysupgrade固件"
+            echo "⚠️  警告：未找到sysupgrade固件，但发现了以下固件文件："
             find $FIRMWARE_DIR -type f -name "*.bin" | head -5 | while read f; do
               echo "  可用文件: $(basename $f) ($(ls -lh $f | awk '{print $5}'))"
             done
@@ -293,7 +307,7 @@ jobs:
         fi
 
     - name: 上传固件产物
-      if: success() || failure()
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: immortalwrt-${{ env.IMMORTALWRT_VERSION }}-${{ env.DEVICE }}
@@ -301,6 +315,7 @@ jobs:
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/config.buildinfo
+        if-no-files-found: error
         retention-days: 90
 
     - name: 上传软件包
@@ -311,6 +326,7 @@ jobs:
         path: |
           immortalwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/
           immortalwrt/bin/packages/
+        if-no-files-found: warn
         retention-days: 30
 
     - name: 上传编译日志
@@ -322,6 +338,7 @@ jobs:
           immortalwrt/build_full.log
           immortalwrt/.config
           immortalwrt/logs/
+        if-no-files-found: warn
         retention-days: 7
 
     - name: 显示ccache统计
