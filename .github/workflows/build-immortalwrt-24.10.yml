@@ -162,19 +162,19 @@ jobs:
         else
           # 基础配置 - 针对eMMC设备优化
           echo "应用基础eMMC配置..."
-          cat <<'EOF' | sed 's/^          //' >> .config
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y
-          CONFIG_TARGET_ROOTFS_SQUASHFS=y
-          CONFIG_TARGET_ROOTFS_PARTSIZE=${{ env.EMMC_SYSTEM_SIZE }}
-          CONFIG_PACKAGE_kmod-fs-ext4=y
-          CONFIG_PACKAGE_kmod-mmc=y
-          CONFIG_PACKAGE_e2fsprogs=y
-          CONFIG_PACKAGE_fdisk=y
-          CONFIG_PACKAGE_blkid=y
-          CONFIG_PACKAGE_lsblk=y
-          EOF
+          {
+            echo "CONFIG_TARGET_mediatek=y"
+            echo "CONFIG_TARGET_mediatek_filogic=y"
+            echo "CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y"
+            echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y"
+            echo "CONFIG_TARGET_ROOTFS_PARTSIZE=${{ env.EMMC_SYSTEM_SIZE }}"
+            echo "CONFIG_PACKAGE_kmod-fs-ext4=y"
+            echo "CONFIG_PACKAGE_kmod-mmc=y"
+            echo "CONFIG_PACKAGE_e2fsprogs=y"
+            echo "CONFIG_PACKAGE_fdisk=y"
+            echo "CONFIG_PACKAGE_blkid=y"
+            echo "CONFIG_PACKAGE_lsblk=y"
+          } >> .config
         fi
 
         # 应用自定义软件包选择
@@ -184,38 +184,38 @@ jobs:
         else
           # 推荐的基础软件包
           echo "添加推荐软件包..."
-          cat <<'EOF' | sed 's/^          //' >> .config
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-compat=y
-          CONFIG_PACKAGE_luci-app-ttyd=y
-          CONFIG_PACKAGE_luci-app-statistics=y
-          CONFIG_PACKAGE_htop=y
-          CONFIG_PACKAGE_vim-full=y
-          CONFIG_PACKAGE_curl=y
-          CONFIG_PACKAGE_openssh-sftp-server=y
-          # 启用overlayfs以充分利用eMMC空间
-          CONFIG_PACKAGE_kmod-fs-overlay=y
-          CONFIG_PACKAGE_block-mount=y
-          CONFIG_PACKAGE_f2fs-tools=y
-          EOF
+          {
+            echo "CONFIG_PACKAGE_luci=y"
+            echo "CONFIG_PACKAGE_luci-compat=y"
+            echo "CONFIG_PACKAGE_luci-app-ttyd=y"
+            echo "CONFIG_PACKAGE_luci-app-statistics=y"
+            echo "CONFIG_PACKAGE_htop=y"
+            echo "CONFIG_PACKAGE_vim-full=y"
+            echo "CONFIG_PACKAGE_curl=y"
+            echo "CONFIG_PACKAGE_openssh-sftp-server=y"
+            echo "# 启用overlayfs以充分利用eMMC空间"
+            echo "CONFIG_PACKAGE_kmod-fs-overlay=y"
+            echo "CONFIG_PACKAGE_block-mount=y"
+            echo "CONFIG_PACKAGE_f2fs-tools=y"
+          } >> .config
         fi
 
         # 根据你的分区信息，添加自动挂载大容量分区的配置
         echo "添加eMMC大分区自动挂载配置..."
-        cat <<'EOF' | sed 's/^        //' >> .config
-        # 自动挂载mmcblk0p7到/opt（根据你的分区信息）
-        CONFIG_PACKAGE_automount=y
-        CONFIG_PACKAGE_kmod-fs-ext4=y
-        CONFIG_PACKAGE_kmod-usb-storage=y
-        CONFIG_PACKAGE_kmod-usb-storage-extras=y
-        # 文件系统工具
-        CONFIG_PACKAGE_badblocks=y
-        CONFIG_PACKAGE_dosfstools=y
-        CONFIG_PACKAGE_e2fsprogs=y
-        CONFIG_PACKAGE_f2fsck=y
-        CONFIG_PACKAGE_mkf2fs=y
-        CONFIG_PACKAGE_resize2fs=y
-        EOF
+        {
+          echo "# 自动挂载mmcblk0p7到/opt（根据你的分区信息）"
+          echo "CONFIG_PACKAGE_automount=y"
+          echo "CONFIG_PACKAGE_kmod-fs-ext4=y"
+          echo "CONFIG_PACKAGE_kmod-usb-storage=y"
+          echo "CONFIG_PACKAGE_kmod-usb-storage-extras=y"
+          echo "# 文件系统工具"
+          echo "CONFIG_PACKAGE_badblocks=y"
+          echo "CONFIG_PACKAGE_dosfstools=y"
+          echo "CONFIG_PACKAGE_e2fsprogs=y"
+          echo "CONFIG_PACKAGE_f2fsck=y"
+          echo "CONFIG_PACKAGE_mkf2fs=y"
+          echo "CONFIG_PACKAGE_resize2fs=y"
+        } >> .config
 
         # 最终验证配置
         echo "验证配置并解决依赖..."
