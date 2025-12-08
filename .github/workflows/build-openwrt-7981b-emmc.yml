@@ -128,7 +128,7 @@ jobs:
         fi
 
         # 验证配置（非交互式）
-        yes "" | make oldconfig || make defconfig
+        yes "" | make oldconfig
 
     - name: Download package sources
       run: |
