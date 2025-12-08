@@ -23,14 +23,19 @@ on:
 
 env:
   OPENWRT_VERSION: "24.10.4"
+  OPENWRT_BRANCH: "openwrt-24.10"
   TARGET: "mediatek"
   SUBTARGET: "filogic"
   DEVICE: "zbtlink_z8102ax-emmc"
+  
+  # eMMC分区设置 - 与您的DTS文件保持一致
+  EMMC_PARTITION_6_SIZE: "7168"    # 7GB系统分区
+  EMMC_PARTITION_7_SIZE: "107520"  # 105GB数据分区
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
 
     steps:
     - name: Checkout source code
