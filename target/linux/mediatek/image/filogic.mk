@@ -2959,7 +2959,7 @@ define Device/zbtlink_z8102ax-emmc
   DEVICE_MODEL := Z8102AX
   DEVICE_VARIANT := (eMMC)
   DEVICE_DTS := mt7981b-zbt-z8102ax-emmc
-  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
+  DEVICE_DTS_DIR := ../dts
   SUPPORTED_DEVICES := zbtlink,z8102ax-emmc
   DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
     kmod-usb3 kmod-usb2 kmod-mmc-mtk kmod-fs-ext4 \
