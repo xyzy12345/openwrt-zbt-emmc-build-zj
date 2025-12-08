@@ -747,7 +747,7 @@ define Device/buffalo_wsr-6000ax8
   IMAGE_SIZE := 26624k
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
 endef
-TARGET_DEVICES += buffalo_wsr-6000ax8
+# TARGET_DEVICES += buffalo_wsr-6000ax8
 
 define Device/cetron_ct3003
   DEVICE_VENDOR := Cetron
