@@ -127,8 +127,8 @@ jobs:
           cat ../source/configs/custom.config >> .config
         fi
 
-        # 验证配置
-        make oldconfig
+        # 验证配置（非交互式）
+        yes "" | make oldconfig || make defconfig
 
     - name: Download package sources
       run: |
