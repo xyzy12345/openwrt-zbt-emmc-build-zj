@@ -1,10 +1,59 @@
-# Build Error Analysis - Workflow Run #20036959834
+# Build Error Analysis
 
-## Error Summary
+## Latest Error - Workflow Run #20038869131
+
+**Workflow Run:** https://github.com/xyzy12345/openwrt-zbt-emmc-build-zj/actions/runs/20038869131
+
+**Status:** ❌ Failed (Duplicate Label Error)
+
+**Job:** build (Step 8: "Build OpenWrt")
+
+### Error Summary
+
+Device Tree Source (DTS) compilation failed due to a duplicate label definition:
+
+```
+ERROR (duplicate_label): /soc/efuse@11f20000/calib@8dc: Duplicate label 'phy_calibration' on /soc/efuse@11f20000/calib@8dc and /soc/efuse@11f20000/phy-calib@8dc
+```
+
+### Root Cause
+
+The `target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts` file defined a label `phy_calibration` at line 368:
+
+```dts
+&efuse {
+    phy_calibration: calib@8dc {
+        reg = <0x8dc 0x10>;
+    };
+    // ... other nodes
+}
+```
+
+However, the parent `mt7981.dtsi` file (from OpenWrt source) already defines a `phy-calib@8dc` node with the `phy_calibration` label. Device Tree labels must be unique across the entire device tree, so this caused a duplicate label error.
+
+### Solution Applied
+
+Removed the duplicate `phy_calibration: calib@8dc` definition from the `&efuse` block in both:
+- `target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts`
+- `custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts`
+
+The DTS file now relies on the `phy_calibration` label provided by the parent `mt7981.dtsi`, which is the correct approach. The reference at line 164 (`nvmem-cells = <&phy_calibration>;`) will correctly resolve to the parent's definition.
+
+### Changes Made
+
+**Files Modified:**
+1. `target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts` - Removed lines 368-370
+2. `custom-configs/dts/mt7981b-zbt-z8102ax-emmc.dts` - Removed lines 368-370
+
+**Change Type:** Remove duplicate definition (no functional change)
+
+---
+
+## Previous Error - Workflow Run #20036959834
 
 **Workflow Run:** https://github.com/xyzy12345/openwrt-zbt-emmc-build-zj/actions/runs/20036959834
 
-**Status:** ❌ Failed
+**Status:** ❌ Failed (Resolved)
 
 **Job:** build (Step 8: "Build OpenWrt")
 
