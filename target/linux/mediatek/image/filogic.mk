@@ -251,7 +251,7 @@ define Device/acer_predator-w6x-ubootmod
   ARTIFACT/preloader.bin := mt7986-bl2 spim-nand-ddr4
   ARTIFACT/bl31-uboot.fip := mt7986-bl31-uboot acer_predator-w6x
 endef
-TARGET_DEVICES += acer_predator-w6x-ubootmod
+# TARGET_DEVICES += acer_predator-w6x-ubootmod
 
 define Device/acer_vero-w6m
   DEVICE_VENDOR := Acer
@@ -747,7 +747,7 @@ define Device/buffalo_wsr-6000ax8
   IMAGE_SIZE := 26624k
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
 endef
-TARGET_DEVICES += buffalo_wsr-6000ax8
+# TARGET_DEVICES += buffalo_wsr-6000ax8
 
 define Device/cetron_ct3003
   DEVICE_VENDOR := Cetron
