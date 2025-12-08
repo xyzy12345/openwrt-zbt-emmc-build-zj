@@ -146,8 +146,8 @@ jobs:
         # 检查编译结果
         BIN_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
         
-        # 尝试多种可能的固件文件名模式
-        FIRMWARE_PATTERN="*${{ env.DEVICE }}*sysupgrade*.bin"
+        # 尝试多种可能的固件文件名模式 (更具体以避免错误匹配)
+        FIRMWARE_PATTERN="*${{ env.TARGET }}-${{ env.SUBTARGET }}-${{ env.DEVICE }}*sysupgrade*.bin"
         FIRMWARE_FILES=$(find "$BIN_DIR" -name "$FIRMWARE_PATTERN" -type f 2>/dev/null)
         
         if [ -n "$FIRMWARE_FILES" ]; then
