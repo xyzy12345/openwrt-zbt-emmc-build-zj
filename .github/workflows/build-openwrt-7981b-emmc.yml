@@ -72,7 +72,7 @@ jobs:
         cd openwrt
 
         # 复制DTS文件
-        if [ -f ../source/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+        if [ -f ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
           echo "复制DTS文件..."
           mkdir -p target/linux/mediatek/dts/
           cp ../source/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
