@@ -216,8 +216,8 @@
 	cap-mmc-highspeed;
 	mmc-hs200-1_8v;
 	non-removable;
-	vmmc-supply = <&regulator_3p3v>;
-	vqmmc-supply = <&regulator_3p3v>;
+	vmmc-supply = <&regulator-3p3v>;
+	vqmmc-supply = <&regulator-3p3v>;
 	no-sd;
 	no-sdio;
 
