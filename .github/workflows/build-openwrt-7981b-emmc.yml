@@ -144,14 +144,24 @@ jobs:
         make -j$BUILD_JOBS V=s 2>&1 | tee build.log
 
         # 检查编译结果
-        FIRMWARE_PATH="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-${{ env.OPENWRT_VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}-${{ env.DEVICE }}-sysupgrade.bin"
-        if [ -f "$FIRMWARE_PATH" ]; then
-          echo "编译成功！"
-          echo "固件路径: $FIRMWARE_PATH"
+        BIN_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        
+        # 尝试多种可能的固件文件名模式
+        FIRMWARE_PATTERN="*${{ env.DEVICE }}*sysupgrade*.bin"
+        FIRMWARE_FILES=$(find "$BIN_DIR" -name "$FIRMWARE_PATTERN" -type f 2>/dev/null)
+        
+        if [ -n "$FIRMWARE_FILES" ]; then
+          echo "编译成功！找到固件文件:"
+          echo "$FIRMWARE_FILES"
         else
-          echo "编译失败！"
-          echo "查找可能的固件文件:"
-          find bin/targets/ -name "*.bin" -type f | head -10
+          echo "编译失败！未找到预期的固件文件 (模式: $FIRMWARE_PATTERN)"
+          echo "查找所有固件文件:"
+          find "$BIN_DIR" -name "*.bin" -type f 2>/dev/null | head -20
+          
+          echo ""
+          echo "检查设备定义是否正确加载:"
+          echo "期望设备: ${{ env.DEVICE }}"
+          
           exit 1
         fi
 
