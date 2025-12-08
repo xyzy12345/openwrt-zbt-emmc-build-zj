@@ -75,7 +75,7 @@ jobs:
         if [ -f ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
           echo "复制DTS文件..."
           mkdir -p target/linux/mediatek/dts/
-          cp ../source/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
+          cp ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
         else
           echo "警告: 未找到DTS文件"
         fi
