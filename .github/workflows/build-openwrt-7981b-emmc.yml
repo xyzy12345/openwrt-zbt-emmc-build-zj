@@ -89,7 +89,7 @@ jobs:
         FILOGIC_MK="target/linux/mediatek/image/filogic.mk"
         if [ -f "$FILOGIC_MK" ]; then
           echo "检查filogic.mk中是否存在zbtlink_z8102ax-emmc设备定义..."
-          if ! grep -q "define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
+          if ! grep -q "^define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
             echo "未找到zbtlink_z8102ax-emmc设备定义，正在添加..."
             cat >> "$FILOGIC_MK" << 'EOF'
 
