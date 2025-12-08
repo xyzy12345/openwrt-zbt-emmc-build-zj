@@ -111,7 +111,7 @@
 		};
 	};
 
-	regulator-3p3v {
+	regulator_3p3v: regulator-3p3v {
 		compatible = "regulator-fixed";
 		regulator-name = "fixed-3.3V";
 		regulator-min-microvolt = <3300000>;
@@ -282,20 +282,6 @@
 };
 
 &pio {
-	mmc0_pins_default: mmc0-pins-default {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
-	mmc0_pins_uhs: mmc0-pins-uhs {
-		mux {
-			function = "flash";
-			groups = "emmc_45";
-		};
-	};
-
 	gpio-line-names =
 		"mesh",		/* GPIO0 */
 		"reset",	/* GPIO1 */
@@ -318,6 +304,20 @@
 		"switch_reset",	/* GPIO39 */
 		"", "", "", "", "", "", "",	/* GPIO40-46 */
 		"", "", "", "", "", "";		/* GPIO47-52 */
+
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
 
 	spi0_flash_pins: spi0-pins {
 		mux {
