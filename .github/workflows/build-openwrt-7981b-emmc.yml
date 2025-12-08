@@ -130,7 +130,28 @@ jobs:
     - name: Update feeds
       run: |
         cd openwrt
-        ./scripts/feeds update -a
+        
+        # 添加重试逻辑以处理临时网络错误
+        MAX_RETRIES=3
+        RETRY_DELAY=10
+        
+        for i in $(seq 1 $MAX_RETRIES); do
+          echo "尝试更新feeds (第 $i/$MAX_RETRIES 次)..."
+          if ./scripts/feeds update -a; then
+            echo "Feeds更新成功"
+            break
+          else
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "更新feeds失败，等待 $RETRY_DELAY 秒后重试..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))  # 指数退避
+            else
+              echo "更新feeds失败，已达最大重试次数"
+              exit 1
+            fi
+          fi
+        done
+        
         ./scripts/feeds install -a
 
     - name: Configure OpenWrt
