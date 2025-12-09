@@ -108,9 +108,8 @@ jobs:
           # 使用 sysupgrade-tar 格式，这是 eMMC 设备的标准方法
           IMAGES := sysupgrade.bin
           IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
-          # eMMC 特定的 artifacts
-          ARTIFACTS := emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip
-          ARTIFACT/emmc-gpt.bin := mt798x-gpt emmc
+          # eMMC 特定的 artifacts (不需要 gpt.bin，因为 DTS 中已定义分区表)
+          ARTIFACTS := emmc-preloader.bin emmc-bl31-uboot.fip
           ARTIFACT/emmc-preloader.bin := mt7981-bl2 emmc-ddr4
           ARTIFACT/emmc-bl31-uboot.fip := mt7981-bl31-uboot zbtlink_z8102ax-emmc
         endef
