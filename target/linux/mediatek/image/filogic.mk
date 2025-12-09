@@ -139,6 +139,14 @@ define Build/cetron-header
 	rm $@.tmp
 endef
 
+define Build/sysupgrade-emmc
+	$(call Build/mt798x-gpt,emmc)
+	$(call Build/pad-to,64M)
+	$(call Build/append-kernel)
+	$(call Build/append-rootfs)
+	$(call Build/check-size)
+endef
+
 define Device/zbtlink_z8102ax-emmc
   DEVICE_VENDOR := ZBT
   DEVICE_MODEL := Z8102AX
