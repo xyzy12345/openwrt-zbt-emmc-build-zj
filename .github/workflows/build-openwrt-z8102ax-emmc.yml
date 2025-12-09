@@ -1,0 +1,368 @@
+name: Build OpenWrt for ZBT-Z8102AX-eMMC (MT7981B)
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'configs/**'
+      - 'dts/**'
+      - 'patches/**'
+      - 'target/linux/mediatek/**'
+      - 'scripts/**'
+      - '.github/workflows/build-openwrt-7981b-emmc.yml'
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 2 * * *'  # 每天UTC 2点自动构建
+  workflow_dispatch:  # 手动触发
+    inputs:
+      clean_build:
+        description: 'Clean build (remove ccache)'
+        required: false
+        default: 'false'
+
+env:
+  OPENWRT_VERSION: "24.10.4"
+  OPENWRT_BRANCH: "openwrt-24.10"
+  TARGET: "mediatek"
+  SUBTARGET: "filogic"
+  DEVICE: "zbtlink_z8102ax-emmc"
+  
+  # eMMC分区设置 - 与您的DTS文件保持一致
+  EMMC_PARTITION_6_SIZE: "7168"    # 7GB系统分区
+  EMMC_PARTITION_7_SIZE: "107520"  # 105GB数据分区
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+      with:
+        path: source
+        fetch-depth: 0
+
+    - name: Setup build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          clang \
+          flex \
+          bison \
+          g++ \
+          gawk \
+          gcc-multilib \
+          gettext \
+          git \
+          libncurses5-dev \
+          libssl-dev \
+          python3 \
+          python3-lib2to3 \
+          rsync \
+          unzip \
+          zlib1g-dev \
+          file \
+          wget
+
+        # 设置ccache
+        sudo apt-get install -y ccache
+        echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+    - name: Clone OpenWrt
+      run: |
+        git clone --depth=1 https://github.com/openwrt/openwrt.git --branch v${{ env.OPENWRT_VERSION }}
+        cd openwrt
+
+        # 复制DTS文件
+        if [ -f ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts ]; then
+          echo "复制DTS文件..."
+          mkdir -p target/linux/mediatek/dts/
+          cp ../source/target/linux/mediatek/dts/mt7981b-zbt-z8102ax-emmc.dts target/linux/mediatek/dts/
+        else
+          echo "警告: 未找到DTS文件"
+        fi
+
+        # 检查并添加Build/sysupgrade-emmc函数到filogic.mk
+        FILOGIC_MK="target/linux/mediatek/image/filogic.mk"
+        if [ -f "$FILOGIC_MK" ]; then
+          echo "检查filogic.mk中是否存在Build/sysupgrade-emmc函数..."
+          
+          # 首先检查Build/sysupgrade-emmc函数是否存在
+          if ! grep -q "^define Build/sysupgrade-emmc" "$FILOGIC_MK"; then
+            echo "未找到Build/sysupgrade-emmc函数，正在添加..."
+            
+            # 查找合适的位置插入（通常在Build函数区域）
+            # 在文件末尾添加
+            cat >> "$FILOGIC_MK" <<'BUILDFUNC'
+
+# ZBT Z8102AX eMMC sysupgrade构建函数
+define Build/sysupgrade-emmc
+  # 创建GPT分区表（基于实际设备分区布局）
+  $$(call Build/mt798x-gpt, \
+    --part "uboot:0:8192" \
+    --part "ubootenv:8192:1024" \
+    --part "factory:9216:4096" \
+    --part "fip:13312:4096" \
+    --part "kernel:17408:65536" \
+    --part "rootfs:82944:14597120" \
+    --part "opt:14680065:220200960" \
+  )
+  
+  # 创建64M的基础镜像用于对齐
+  dd if=/dev/zero of=$$@.tmp bs=1M count=64 conv=notrunc
+  
+  # 复制GPT分区表
+  cat $$@.gpt >> $$@.tmp
+  
+  # 写入内核镜像到kernel分区（偏移17408扇区）
+  dd if=$$(IMAGE_KERNEL) of=$$@.tmp bs=512 seek=17408 conv=notrunc
+  
+  # 写入根文件系统到rootfs分区（偏移82944扇区）
+  dd if=$$(IMAGE_ROOTFS) of=$$@.tmp bs=512 seek=82944 conv=notrunc
+  
+  # 验证大小不超过数据分区起始位置
+  $$(call Build/check-size,14680065s)
+  
+  # 生成最终镜像
+  mv $$@.tmp $$@
+endef
+BUILDFUNC
+            echo "Build/sysupgrade-emmc函数已添加到filogic.mk"
+          else
+            echo "Build/sysupgrade-emmc函数已存在"
+          fi
+          
+          # 现在检查并添加设备定义
+          echo "检查filogic.mk中是否存在zbtlink_z8102ax-emmc设备定义..."
+          if ! grep -q "^define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
+            echo "未找到zbtlink_z8102ax-emmc设备定义，正在添加..."
+            
+            # 修正设备定义：使用正确的镜像名称和格式
+            cat >> "$FILOGIC_MK" <<'DEVICEDEF'
+
+# ZBT Z8102AX eMMC 路由器
+define Device/zbtlink_z8102ax-emmc
+  DEVICE_VENDOR := ZBT
+  DEVICE_MODEL := Z8102AX (eMMC)
+  DEVICE_DTS := mt7981b-zbt-z8102ax-emmc
+  DEVICE_DTS_DIR := ../dts
+  SUPPORTED_DEVICES := zbtlink,z8102ax-emmc
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
+    kmod-usb3 kmod-usb2 kmod-mmc-mtk kmod-fs-ext4 \
+    kmod-mtk-ppe kmod-hwmon-pwmfan
+  # 指定生成sysupgrade-emmc.bin镜像
+  IMAGES := sysupgrade-emmc.bin
+  # 使用上面定义的Build/sysupgrade-emmc函数
+  IMAGE/sysupgrade-emmc.bin := sysupgrade-emmc | append-metadata
+  # eMMC设备不需要UBI相关设置
+  KERNEL_SIZE := 32m
+endef
+TARGET_DEVICES += zbtlink_z8102ax-emmc
+DEVICEDEF
+            
+            echo "设备定义已添加到filogic.mk"
+          else
+            echo "zbtlink_z8102ax-emmc设备定义已存在，检查是否需要更新..."
+            
+            # 如果已存在但需要更新镜像名称
+            if grep -q "define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
+              # 更新为正确的镜像名称和构建函数
+              sed -i '/define Device\/zbtlink_z8102ax-emmc/,/endef/ {
+                /IMAGES :=/c\  IMAGES := sysupgrade-emmc.bin
+                /IMAGE\/sysupgrade.bin/c\  IMAGE/sysupgrade-emmc.bin := sysupgrade-emmc | append-metadata
+                /UBOOTENV_IN_UBI/d
+                /KERNEL_IN_UBI/d
+              }' "$FILOGIC_MK"
+              echo "已更新设备定义中的镜像配置"
+            fi
+          fi
+          
+          # 验证添加是否成功
+          echo -e "\n=== 验证设备定义和构建函数 ==="
+          echo "Build/sysupgrade-emmc函数:"
+          if grep -q "^define Build/sysupgrade-emmc" "$FILOGIC_MK"; then
+            echo "  ✓ 存在"
+          else
+            echo "  ✗ 不存在"
+          fi
+          
+          echo "Device/zbtlink_z8102ax-emmc定义:"
+          if grep -q "^define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
+            echo "  ✓ 存在"
+            # 显示设备定义内容
+            sed -n '/^define Device\/zbtlink_z8102ax-emmc/,/^endef/p' "$FILOGIC_MK"
+          else
+            echo "  ✗ 不存在"
+          fi
+          
+        else
+          echo "错误: 未找到filogic.mk文件"
+          exit 1
+        fi
+
+        # 复制配置文件
+        if [ -f ../source/configs/zbtlink_z8102ax-emmc.config ]; then
+          echo "复制配置文件..."
+          cp ../source/configs/zbtlink_z8102ax-emmc.config .config
+        else
+          echo "警告: 未找到配置文件，将使用默认配置"
+          # 如果没有配置文件，则创建一个包含基本配置的.config
+          cat > .config <<'CONFIG'
+CONFIG_TARGET_mediatek=y
+CONFIG_TARGET_mediatek_filogic=y
+CONFIG_TARGET_mediatek_filogic_DEVICE_zbtlink_z8102ax-emmc=y
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-mmc-mtk=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-usb3=y
+CONFIG_PACKAGE_kmod-usb2=y
+CONFIG_PACKAGE_fdisk=y
+CONFIG_PACKAGE_lsblk=y
+CONFIG_PACKAGE_gdisk=y
+CONFIG_PACKAGE_kmod-usb-storage=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_kmod-fs-ntfs=y
+CONFIG
+        fi
+
+    - name: Update feeds
+      run: |
+        cd openwrt
+        
+        # 添加重试逻辑以处理临时网络错误
+        MAX_RETRIES=3
+        RETRY_DELAY=10
+        
+        for i in $(seq 1 $MAX_RETRIES); do
+          echo "尝试更新feeds (第 $i/$MAX_RETRIES 次)..."
+          if ./scripts/feeds update -a; then
+            echo "Feeds更新成功"
+            break
+          else
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "更新feeds失败，等待 $RETRY_DELAY 秒后重试..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))  # 指数退避
+            else
+              echo "更新feeds失败，已达最大重试次数"
+              exit 1
+            fi
+          fi
+        done
+        
+        ./scripts/feeds install -a
+
+    - name: Configure OpenWrt
+      run: |
+        cd openwrt
+
+        # 清理缓存（如果选择）
+        if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+          echo "执行清理构建..."
+          make clean
+          rm -rf tmp .config* feeds
+        fi
+
+        # 生成默认配置
+        make defconfig
+
+        # 自定义配置（如果需要）
+        if [ -f ../source/configs/custom.config ]; then
+          echo "应用自定义配置..."
+          cat ../source/configs/custom.config >> .config
+        fi
+
+        # 验证配置（非交互式）
+        yes "" | make oldconfig
+
+    - name: Download package sources
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Build OpenWrt
+      run: |
+        cd openwrt
+
+        # 设置编译线程数
+        CPU_CORES=$(nproc)
+        BUILD_JOBS=$((CPU_CORES + 1))
+
+        # 开始编译
+        echo "开始编译，使用 $BUILD_JOBS 个线程..."
+        make -j$BUILD_JOBS V=s 2>&1 | tee build.log
+
+        # 检查编译结果
+        BIN_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
+        
+        # 检查是否生成了sysupgrade-emmc.bin
+        FIRMWARE_PATTERN="*sysupgrade-emmc.bin"
+        FIRMWARE_FILES=$(find "$BIN_DIR" -name "$FIRMWARE_PATTERN" -type f 2>/dev/null)
+        
+        if [ -n "$FIRMWARE_FILES" ]; then
+          echo "编译成功！找到固件文件:"
+          echo "$FIRMWARE_FILES"
+          
+          # 显示固件信息
+          for fw in $FIRMWARE_FILES; do
+            echo "=== $fw 信息 ==="
+            ls -lh "$fw"
+            if command -v file &> /dev/null; then
+              file "$fw"
+            fi
+          done
+        else
+          echo "编译可能失败！未找到预期的固件文件 (模式: $FIRMWARE_PATTERN)"
+          echo "查找所有固件文件:"
+          find "$BIN_DIR" -name "*.bin" -type f 2>/dev/null | head -20
+          
+          echo ""
+          echo "检查设备定义是否正确加载:"
+          echo "期望设备: ${{ env.DEVICE }}"
+          
+          # 检查构建日志中的错误
+          if [ -f "build.log" ]; then
+            echo "=== 构建日志中的错误 ==="
+            grep -i "error\|failed\|missing\|stop" build.log | head -30
+          fi
+          
+          exit 1
+        fi
+
+    - name: Upload firmware artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: openwrt-${{ env.DEVICE }}-firmware
+        path: |
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums
+          openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/*
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload build logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: openwrt-${{ env.DEVICE }}-logs
+        path: |
+          openwrt/build.log
+          openwrt/.config
+          openwrt/config.*
+          openwrt/target/linux/mediatek/image/filogic.mk
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: openwrt/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin
+        draft: false
+        prerelease: false
+        generate_release_notes: true
