@@ -1,6 +1,73 @@
 # Build Error Analysis
 
-## Latest Error - Workflow Run #20038869131
+## Latest Error - Workflow Run #20040943331
+
+**Workflow Run:** https://github.com/xyzy12345/openwrt-zbt-emmc-build-zj/actions/runs/20040943331
+
+**Status:** ❌ Failed (Missing Build Function)
+
+**Job:** build (Step 8: "Build OpenWrt")
+
+### Error Summary
+
+OpenWrt build failed with a missing build function error:
+
+```
+Makefile:49: *** Missing Build/sysupgrade-emmc.  Stop.
+```
+
+### Root Cause
+
+The device definition for `zbtlink_z8102ax-emmc` in `target/linux/mediatek/image/filogic.mk` referenced a build function `sysupgrade-emmc` on line 154, but this function was never defined.
+
+```makefile
+IMAGE/sysupgrade.bin := sysupgrade-emmc | append-metadata
+```
+
+The OpenWrt build system requires that all build functions referenced in device definitions must be defined. The `sysupgrade-emmc` function is a custom function needed to create the sysupgrade firmware image for eMMC-based devices.
+
+### Solution Applied
+
+Added the missing `Build/sysupgrade-emmc` function definition in `target/linux/mediatek/image/filogic.mk`:
+
+```makefile
+define Build/sysupgrade-emmc
+	$(call Build/mt798x-gpt,emmc)
+	$(call Build/pad-to,64M)
+	$(call Build/append-kernel)
+	$(call Build/append-rootfs)
+	$(call Build/check-size)
+endef
+```
+
+This function:
+1. Creates a GPT partition table suitable for eMMC devices using `Build/mt798x-gpt` with the `emmc` parameter
+2. Pads the image to 64M to match the partition layout defined in `mt798x-gpt`
+3. Appends the kernel image
+4. Appends the root filesystem
+5. Checks that the final image size is within limits
+
+### Changes Made
+
+**File Modified:** `target/linux/mediatek/image/filogic.mk`
+
+**Change Type:** Add missing build function definition
+
+**Lines Added:** 142-148 (8 lines)
+
+**Commit:** 4420be1 - "Add Build/sysupgrade-emmc function for eMMC device support"
+
+### Expected Outcome
+
+✅ The build system can now find the `Build/sysupgrade-emmc` function  
+✅ OpenWrt build should proceed to create the sysupgrade image  
+✅ The firmware image will have proper GPT partitioning for eMMC devices  
+
+---
+
+---
+
+## Workflow Run #20038869131
 
 **Workflow Run:** https://github.com/xyzy12345/openwrt-zbt-emmc-build-zj/actions/runs/20038869131
 
