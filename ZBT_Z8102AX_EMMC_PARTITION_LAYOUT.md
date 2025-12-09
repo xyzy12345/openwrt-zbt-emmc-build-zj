@@ -73,7 +73,7 @@ OpenWrt 的 `mt798x-gpt emmc` 函数生成的标准分区布局：
 ptgen -g -o $@.tmp -a 1 -l 1024 \
     -t 0x83 -N ubootenv -r -p 512k@4M \      # @ 8192
     -t 0x83 -N factory  -r -p 2M@4608k \     # @ 9216
-    -t 0xef -N fip      -r -p 4M@6656k \     # @ 13312
+    -t 0xef -N fip      -r -p 4M@6656k \     # @ 13312 (fip在标准布局)
         -N recovery -r -p 32M@12M \          # @ 24576 ← 此设备没有
     -t 0x2e -N production  -p XXM@64M        # @ 131072
 ```
@@ -81,8 +81,8 @@ ptgen -g -o $@.tmp -a 1 -l 1024 \
 ### 不兼容的原因
 
 1. **缺少 recovery 分区**: 标准布局在 12M (扇区 24576) 有 32M recovery 分区，但此设备没有
-2. **kernel/fip 位置不同**: 此设备的 fip 在扇区 17408 (8.5M)，而不是标准的 24576 (12M)
-3. **rootfs 起始位置不同**: 此设备 rootfs 从扇区 82944 开始，而标准布局从 131072 (64M) 开始
+2. **kernel/fip 位置不同**: 此设备的 kernel/fip 在扇区 17408 (8.7MB)，标准布局的 fip 在 13312 (6.5MB)，recovery 在 24576 (12MB)
+3. **rootfs 起始位置不同**: 此设备 rootfs 从扇区 82944 (40.5MB) 开始，而标准 production 从 131072 (64MB) 开始
 4. **大容量数据分区**: 此设备有 105GB 的 opt 分区，这不是标准布局的一部分
 
 ### 正确的方法
