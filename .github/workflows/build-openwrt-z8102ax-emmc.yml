@@ -9,7 +9,7 @@ on:
       - 'patches/**'
       - 'target/linux/mediatek/**'
       - 'scripts/**'
-      - '.github/workflows/build-openwrt-7981b-emmc.yml'
+      - '.github/workflows/build-openwrt-z8102ax-emmc.yml'
   pull_request:
     branches: [main, master]
   schedule:
@@ -108,7 +108,7 @@ jobs:
             --part "fip:13312:4096" \
             --part "kernel:17408:65536" \
             --part "rootfs:82944:14597120" \
-            --part "opt:14680065:220200960"
+            --part "opt:14680065:220200960" \
           )
 
           # 创建64M的基础镜像用于对齐
