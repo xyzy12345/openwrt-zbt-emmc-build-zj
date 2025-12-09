@@ -85,62 +85,14 @@ jobs:
           echo "警告: 未找到DTS文件"
         fi
 
-        # 检查并添加Build/sysupgrade-emmc函数到filogic.mk
+        # 检查并添加设备定义到filogic.mk
         FILOGIC_MK="target/linux/mediatek/image/filogic.mk"
         if [ -f "$FILOGIC_MK" ]; then
-          echo "检查filogic.mk中是否存在Build/sysupgrade-emmc函数..."
-
-          # 首先检查Build/sysupgrade-emmc函数是否存在
-          if ! grep -q "^define Build/sysupgrade-emmc" "$FILOGIC_MK"; then
-            echo "未找到Build/sysupgrade-emmc函数，正在添加..."
-
-            # 查找合适的位置插入（通常在Build函数区域）
-            # 在文件末尾添加
-            sed 's/^        //' >> "$FILOGIC_MK" <<'BUILDFUNC'
-
-        # ZBT Z8102AX eMMC sysupgrade构建函数
-        define Build/sysupgrade-emmc
-          # 创建GPT分区表（基于实际设备分区布局）
-          $$(call Build/mt798x-gpt, \
-            --part "uboot:0:8192" \
-            --part "ubootenv:8192:1024" \
-            --part "factory:9216:4096" \
-            --part "fip:13312:4096" \
-            --part "kernel:17408:65536" \
-            --part "rootfs:82944:14597120" \
-            --part "opt:14680065:220200960" \
-          )
-
-          # 创建64M的基础镜像用于对齐
-          dd if=/dev/zero of=$$@.tmp bs=1M count=64 conv=notrunc
-
-          # 复制GPT分区表
-          cat $$@.gpt >> $$@.tmp
-
-          # 写入内核镜像到kernel分区（偏移17408扇区）
-          dd if=$$(IMAGE_KERNEL) of=$$@.tmp bs=512 seek=17408 conv=notrunc
-
-          # 写入根文件系统到rootfs分区（偏移82944扇区）
-          dd if=$$(IMAGE_ROOTFS) of=$$@.tmp bs=512 seek=82944 conv=notrunc
-
-          # 验证大小不超过数据分区起始位置
-          $$(call Build/check-size,14680065s)
-
-          # 生成最终镜像
-          mv $$@.tmp $$@
-        endef
-        BUILDFUNC
-            echo "Build/sysupgrade-emmc函数已添加到filogic.mk"
-          else
-            echo "Build/sysupgrade-emmc函数已存在"
-          fi
-
-          # 现在检查并添加设备定义
           echo "检查filogic.mk中是否存在zbtlink_z8102ax-emmc设备定义..."
           if ! grep -q "^define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
             echo "未找到zbtlink_z8102ax-emmc设备定义，正在添加..."
 
-            # 修正设备定义：使用正确的镜像名称和格式
+            # 修正设备定义：使用类似 sysupgrade-tar 的简单方法
             sed 's/^        //' >> "$FILOGIC_MK" <<'DEVICEDEF'
 
         # ZBT Z8102AX eMMC 路由器
@@ -152,44 +104,26 @@ jobs:
           SUPPORTED_DEVICES := zbtlink,z8102ax-emmc
           DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
             kmod-usb3 kmod-usb2 kmod-mmc-mtk kmod-fs-ext4 \
-            kmod-mtk-ppe kmod-hwmon-pwmfan
-          # 指定生成sysupgrade-emmc.bin镜像
-          IMAGES := sysupgrade-emmc.bin
-          # 使用上面定义的Build/sysupgrade-emmc函数
-          IMAGE/sysupgrade-emmc.bin := sysupgrade-emmc | append-metadata
-          # eMMC设备不需要UBI相关设置
-          KERNEL_SIZE := 32m
+            kmod-mtk-ppe kmod-hwmon-pwmfan e2fsprogs f2fsck mkf2fs
+          # 使用 sysupgrade-tar 格式，这是 eMMC 设备的标准方法
+          IMAGES := sysupgrade.bin
+          IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+          # eMMC 特定的 artifacts
+          ARTIFACTS := emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip
+          ARTIFACT/emmc-gpt.bin := mt798x-gpt emmc
+          ARTIFACT/emmc-preloader.bin := mt7981-bl2 emmc-ddr4
+          ARTIFACT/emmc-bl31-uboot.fip := mt7981-bl31-uboot zbtlink_z8102ax-emmc
         endef
         TARGET_DEVICES += zbtlink_z8102ax-emmc
         DEVICEDEF
 
             echo "设备定义已添加到filogic.mk"
           else
-            echo "zbtlink_z8102ax-emmc设备定义已存在，检查是否需要更新..."
-
-            # 如果已存在但需要更新镜像名称
-            if grep -q "define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
-              # 更新为正确的镜像名称和构建函数
-              sed -i '/define Device\/zbtlink_z8102ax-emmc/,/endef/ {
-                /IMAGES :=/c\  IMAGES := sysupgrade-emmc.bin
-                /IMAGE\/sysupgrade.bin/c\  IMAGE/sysupgrade-emmc.bin := sysupgrade-emmc | append-metadata
-                /UBOOTENV_IN_UBI/d
-                /KERNEL_IN_UBI/d
-              }' "$FILOGIC_MK"
-              echo "已更新设备定义中的镜像配置"
-            fi
+            echo "zbtlink_z8102ax-emmc设备定义已存在"
           fi
 
           # 验证添加是否成功
-          echo -e "\n=== 验证设备定义和构建函数 ==="
-          echo "Build/sysupgrade-emmc函数:"
-          if grep -q "^define Build/sysupgrade-emmc" "$FILOGIC_MK"; then
-            echo "  ✓ 存在"
-          else
-            echo "  ✗ 不存在"
-          fi
-
-          echo "Device/zbtlink_z8102ax-emmc定义:"
+          echo -e "\n=== 验证设备定义 ==="
           if grep -q "^define Device/zbtlink_z8102ax-emmc" "$FILOGIC_MK"; then
             echo "  ✓ 存在"
             # 显示设备定义内容
@@ -299,8 +233,9 @@ jobs:
         # 检查编译结果
         BIN_DIR="bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}"
 
-        # 检查是否生成了sysupgrade-emmc.bin
-        FIRMWARE_PATTERN="*sysupgrade-emmc.bin"
+        # 检查是否生成了 sysupgrade.bin 或任何固件文件
+        # eMMC 设备使用 sysupgrade-tar 会生成 .tar 格式的镜像文件
+        FIRMWARE_PATTERN="*${{ env.DEVICE }}*sysupgrade*.bin"
         FIRMWARE_FILES=$(find "$BIN_DIR" -name "$FIRMWARE_PATTERN" -type f 2>/dev/null)
 
         if [ -n "$FIRMWARE_FILES" ]; then
@@ -319,6 +254,8 @@ jobs:
           echo "编译可能失败！未找到预期的固件文件 (模式: $FIRMWARE_PATTERN)"
           echo "查找所有固件文件:"
           find "$BIN_DIR" -name "*.bin" -type f 2>/dev/null | head -20
+          echo "查找所有 tar 文件:"
+          find "$BIN_DIR" -name "*.tar" -type f 2>/dev/null | head -20
 
           echo ""
           echo "检查设备定义是否正确加载:"
